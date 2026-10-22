@@ -288,6 +288,21 @@ def export_excel(vkr_cols: pd.DataFrame, panel: pd.DataFrame, cdf: pd.DataFrame,
     (DATA / "DATA_DICTIONARY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def export_gretl(panel: pd.DataFrame) -> None:
+    """Числовая версия панели для gretl (без текстовых переменных; страны — числовые коды)."""
+    ids = {iso: k for k, iso in enumerate(sorted(COUNTRIES), start=1)}
+    g = panel.copy()
+    g["iid"] = g["iso3_i"].map(ids)
+    g["jid"] = g["iso3_j"].map(ids)
+    g["trade_k"] = np.round(g["trade"] * 1000).astype(np.int64)   # тыс. долл. (целые) — для команды poisson
+    cols = ["pair_id", "year", "iid", "jid", "trade", "trade_k", "gdp_i", "gdp_j", "gdppc_i", "gdppc_j", "pop_i", "pop_j",
+            "dist", "dist_cap", "contig", "comlang_off", "smctry", "col45", "eu_ij", "nato_ij", "brics_ij", "eaeu_ij",
+            "wto_ij", "rus_pair", "coal_rus_ij", "core14_rus_ij", "ukr_rus_ij", "sanc14_ij", "sanc22_ij", "kor22_ij",
+            "ukr14_ij", "ukr22_ij", "flag_carry"]
+    g[cols].to_csv(DATA / "gravity_panel_gretl.csv", index=False)
+    pd.DataFrame({"id": list(ids.values()), "iso3": list(ids.keys())}).to_csv(DATA / "country_ids_gretl.csv", index=False)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--wb-dir", default="/home/user/datasets", help="каталог с клонами datasets/gdp и datasets/population")
@@ -324,6 +339,7 @@ def main() -> None:
     qr.to_csv(DATA / "data_quality_report.csv", index=False)
 
     export_excel(vkr[cols1], panel, cdf, mt, qr)
+    export_gretl(panel)
 
     print("vkr_panel_renamed:", vkr[cols1].shape, "| gravity_panel:", panel.shape)
     print(panel.isna().sum()[panel.isna().sum() > 0])

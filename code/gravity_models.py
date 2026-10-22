@@ -92,11 +92,11 @@ def results_to_wide(results: dict[str, ppml.FitResult], labels: dict[str, str], 
             t = r.table()
             row[name] = fmt_cell(t.loc[var, "coef"], t.loc[var, "se"], t.loc[var, "p"]) if var in t.index else ""
         rows.append(row)
-    foot = {"N": {}, "pseudo R2": {}, "clusters": {}}
+    foot = {"Число наблюдений": {}, "Псевдо-R²": {}, "Кластеры (пары)": {}}
     for name, r in results.items():
-        foot["N"][name] = f"{r.nobs}"
-        foot["pseudo R2"][name] = f"{r.pseudo_r2:.3f}"
-        foot["clusters"][name] = f"{r.n_clusters}"
+        foot["Число наблюдений"][name] = f"{r.nobs}"
+        foot["Псевдо-R²"][name] = f"{r.pseudo_r2:.3f}"
+        foot["Кластеры (пары)"][name] = f"{r.n_clusters}"
     for k, v in foot.items():
         rows.append({"variable": k, **v})
     return pd.DataFrame(rows)

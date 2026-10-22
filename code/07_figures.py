@@ -38,12 +38,21 @@ mpl.rcParams.update({
     "lines.solid_joinstyle": "round", "axes.unicode_minus": True, "pdf.fonttype": 42,
 })
 W = 6.5  # ширина рисунка, дюймы
-MINUS = lambda s: s.replace("-", "−")
+MINUS = lambda s: s.replace("-", "−").replace(".", ",")   # десятичная запятая, типографский минус
+
+
+class RuFormatter(mpl.ticker.ScalarFormatter):
+    """Подписи делений с десятичной запятой."""
+    def __call__(self, x, pos=None):
+        return super().__call__(x, pos).replace(".", ",")
 
 
 def style_axes(ax, grid_axis="y"):
     ax.grid(True, axis=grid_axis)
     ax.tick_params(length=2.5, width=0.6, color=AXIS)
+    for axis, name in ((ax.xaxis, "x"), (ax.yaxis, "y")):
+        if getattr(ax, f"get_{name}scale")() == "linear":
+            axis.set_major_formatter(RuFormatter())
 
 
 def save(fig, name: str, data: pd.DataFrame | None = None):
@@ -107,8 +116,8 @@ def fig1_descriptive(d: pd.DataFrame):
     ax3 = fig.add_subplot(gs[1, 1])
     ax3.plot(years, wdist.values, color=C_OTHER, lw=1.7)
     end_dot(ax3, years[-1], wdist.iloc[-1], C_OTHER, "s")
-    ax3.text(years[-1] + 0.7, wdist.iloc[-1], f"{wdist.iloc[-1]:.1f}", va="center", fontsize=8, color=INK)
-    ax3.text(years[0], wdist.iloc[0] + 0.15, f"{wdist.iloc[0]:.1f}", va="bottom", fontsize=8, color=INK, ha="left")
+    ax3.text(years[-1] + 0.7, wdist.iloc[-1], MINUS(f"{wdist.iloc[-1]:.1f}"), va="center", fontsize=8, color=INK)
+    ax3.text(years[0], wdist.iloc[0] + 0.15, MINUS(f"{wdist.iloc[0]:.1f}"), va="bottom", fontsize=8, color=INK, ha="left")
     ax3.set_ylim(1, 6); ax3.set_xlim(1999.3, 2027.2)
     ax3.set_ylabel("Тыс. км")
     period_lines(ax3); style_axes(ax3)
@@ -304,9 +313,10 @@ def fig7_distance():
     base = g[(g.period == "прочие пары (база)")].elasticity_russia.mean()
     ax.axhline(base, color=INK2, lw=0.9)
     ax.text(-0.46, base + 0.04, MINUS(f"прочие пары: {base:.2f}"), fontsize=7.6, color=INK2, ha="left", va="bottom")
+    style_axes(ax)
     ax.set_xticks(xs); ax.set_xticklabels(periods); ax.set_xlim(-0.5, 2.5)
     ax.set_ylabel("Эластичность торговли по расстоянию")
-    style_axes(ax); ax.set_ylim(-2.9, 0.1)
+    ax.set_ylim(-2.9, 0.1)
     handles = [Line2D([0], [0], marker="o", color=C_COAL, lw=1.5, ms=5, mec=SURFACE, label="Без санкционных индикаторов"),
                Line2D([0], [0], marker="s", color=C_OTHER, lw=1.5, ms=5, mec=SURFACE, label="С санкционными индикаторами")]
     fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.06), fontsize=7.8)
@@ -363,7 +373,7 @@ def figA2_permutation():
     for ax, col, obs, title in [(axes[0], "sanc14", summ["obs_sanc14"], "а) SANC14"), (axes[1], "sanc22", summ["obs_sanc22"], "б) SANC22")]:
         ax.hist(arr[col], bins=28, color="#c3c2b7", linewidth=0.6, edgecolor=SURFACE)
         ax.axvline(obs, color=C_COAL, lw=2.0)
-        ax.set_xlabel("Коэффициент при случайном назначении «коалиции»"); ax.set_ylabel("Число назначений")
+        ax.set_xlabel("Коэффициент при случайных метках"); ax.set_ylabel("Число назначений")
         style_axes(ax); ax.set_title(title, loc="left", color=INK, fontsize=8.5)
         ax.text(obs + 0.02, ax.get_ylim()[1] * 0.92, MINUS(f"факт: {obs:.2f}"), color=INK, fontsize=8, ha="left", va="top")
     save(fig, "figA2_permutation", arr)

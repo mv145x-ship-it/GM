@@ -100,9 +100,9 @@ def main() -> None:
     ]).fillna("")
     wide1 = pd.concat([wide1.iloc[:2], extra.reindex(columns=wide1.columns, fill_value=""), wide1.iloc[2:]],
                       ignore_index=True)
-    wide1.loc[wide1.variable == "N", "(1) ВКР: МНК (модель 4)"] = "12400"
-    wide1.loc[wide1.variable == "pseudo R2", "(1) ВКР: МНК (модель 4)"] = "0.267"
-    wide1.loc[wide1.variable == "clusters", "(1) ВКР: МНК (модель 4)"] = "—"
+    wide1.loc[wide1.variable == "Число наблюдений", "(1) ВКР: МНК (модель 4)"] = "12400"
+    wide1.loc[wide1.variable == "Псевдо-R²", "(1) ВКР: МНК (модель 4)"] = "0.267"
+    wide1.loc[wide1.variable == "Кластеры (пары)", "(1) ВКР: МНК (модель 4)"] = "—"
     save_table(wide1, "table1_specification_path")
 
     # ------------------------------------------------------------------
@@ -194,6 +194,39 @@ def main() -> None:
                             SANC_VARS + [f"piv14_{s}" for s in sub_order] + [f"piv22_{s}" for s in sub_order])
     save_table(wideA, "table3a_coalition_subgroups")
     save_table(wideB, "table3b_other_subgroups")
+
+
+    # ------------------------------------------------------------------
+    # Таблица 3c. «БРИКС-партнёры» и «хабы» относительно прочих партнёров вне коалиции
+    # ------------------------------------------------------------------
+    rus_m = dh.rus_pair == 1
+    brics_core = {"BRA", "CHN", "IND", "ZAF"}
+    hubs = {"ARE", "TUR", "KAZ", "GEO", "AZE"}
+    for nm, grp in [("brics", brics_core), ("hub", hubs)]:
+        m = rus_m & dh.partner.isin(grp)
+        dh[f"{nm}_p14"] = (m & (dh.year >= 2014)).astype(int)
+        dh[f"{nm}_p22"] = (m & (dh.year >= 2022)).astype(int)
+    rC1 = fit_model(dh, SANC_VARS + POLICY + ["brics_p14", "brics_p22"], "cy+pair")
+    rC2 = fit_model(dh, SANC_VARS + POLICY + ["hub_p14", "hub_p22"], "cy+pair")
+    all_long += [long_rows("T3c brics partners", rC1), long_rows("T3c hubs", rC2)]
+    labC = {**LABELS, "brics_p14": "Россия × {BRA, CHN, IND, ZAF} × (t ≥ 2014)", "brics_p22": "Россия × {BRA, CHN, IND, ZAF} × (t ≥ 2022)",
+            "hub_p14": "Россия × {ARE, TUR, KAZ, GEO, AZE} × (t ≥ 2014)", "hub_p22": "Россия × {ARE, TUR, KAZ, GEO, AZE} × (t ≥ 2022)"}
+    wideC = results_to_wide({"(C1) БРИКС-партнёры": rC1, "(C2) «хабы»": rC2}, labC,
+                            SANC_VARS + ["brics_p14", "brics_p22", "hub_p14", "hub_p22"])
+    save_table(wideC, "table3c_brics_hubs")
+
+    # ------------------------------------------------------------------
+    # Устойчивость к исключению одного российского партнёра (leave-one-out)
+    # ------------------------------------------------------------------
+    rows = []
+    for pcode in sorted(d09.loc[d09.rus_pair == 1, "partner"].unique()):
+        sub = d09[(d09.iso3_i != pcode) & (d09.iso3_j != pcode)]
+        t = fit_model(sub, base_covs, "cy+pair").table()
+        rows.append({"dropped_partner": pcode, "sanc14": t.loc["sanc14_ij", "coef"], "sanc22": t.loc["sanc22_ij", "coef"]})
+    loo = pd.DataFrame(rows)
+    loo.to_csv(RESULTS / "leave_one_out.csv", index=False)
+    summary["loo_sanc14_range"] = [float(loo.sanc14.min()), float(loo.sanc14.max())]
+    summary["loo_sanc22_range"] = [float(loo.sanc22.min()), float(loo.sanc22.max())]
 
     # ------------------------------------------------------------------
     # Таблица 4. Градиент расстояния российской торговли
