@@ -12,6 +12,7 @@ import json
 
 import numpy as np
 import pandas as pd
+from scipy import stats as sps
 
 import ppml
 from gravity_common import COALITION_2014, RESULTS, SUBGROUP_OF
@@ -50,6 +51,18 @@ def contrast(r: ppml.FitResult, weights: dict[str, float]) -> tuple[float, float
     for n, v in weights.items():
         w[idx[n]] = v
     return float(w @ r.params), float(np.sqrt(w @ r.vcov @ w))
+
+
+def wald(r: ppml.FitResult, contrasts: list[dict[str, float]]) -> dict:
+    """Тест Вальда совместного равенства нулю линейных комбинаций (кластерная ковариационная матрица)."""
+    idx = {n: k for k, n in enumerate(r.names)}
+    R = np.zeros((len(contrasts), len(r.names)))
+    for i, w in enumerate(contrasts):
+        for n, v in w.items():
+            R[i, idx[n]] = v
+    rb = R @ r.params
+    stat = float(rb @ np.linalg.solve(R @ r.vcov @ R.T, rb))
+    return {"chi2": stat, "df": len(contrasts), "p": float(sps.chi2.sf(stat, len(contrasts)))}
 
 
 def main() -> None:
@@ -169,6 +182,10 @@ def main() -> None:
     covsA = [f"sanc14_{n}" for n in ("eu", "anglo", "jpnor")] + [f"sanc22_{n}" for n in ("eu", "anglo", "jpnor")] + \
             ["kor22_ij", "ukr14_ij", "ukr22_ij"] + POLICY
     rA = fit_model(dh, covsA, "cy+pair")
+    # тесты равенства эффектов подгрупп коалиции (отдельно для режимов 2014 и 2022 гг.)
+    summary["subgroup_tests"] = {
+        f"eq{yy}": wald(rA, [{f"sanc{yy}_eu": 1, f"sanc{yy}_anglo": -1}, {f"sanc{yy}_eu": 1, f"sanc{yy}_jpnor": -1}])
+        for yy in ("14", "22")}
     # подгруппы «прочих» партнёров (база сравнения — OTHER)
     sub_order = ["CHN", "IND", "TUR", "EAEU_CIS", "GULF_EGY"]
     for sg in sub_order:

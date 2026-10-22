@@ -106,6 +106,10 @@ def load_numbers() -> dict:
                     lo=pct(tot["coef"] - 1.96 * tot["se"]), hi=pct(tot["coef"] + 1.96 * tot["se"]))
     v["loo14"] = [rn(x, 2) for x in sm["loo_sanc14_range"]]
     v["loo22"] = [rn(x, 2) for x in sm["loo_sanc22_range"]]
+
+    def wald_s(w: dict) -> str:
+        return f"χ²({w['df']}) = {rn(w['chi2'], 1 if w['chi2'] >= 10 else 2)}, p {'< 0,001' if w['p'] < 0.001 else '= ' + rn(w['p'], 3)}"
+    v["sgt14"], v["sgt22"] = wald_s(sm["subgroup_tests"]["eq14"]), wald_s(sm["subgroup_tests"]["eq22"])
     v["nobs_main"] = f"{sm['main_nobs']:,}".replace(",", NBSP)
 
     # другие спецификации Таблицы 2
@@ -132,6 +136,10 @@ def load_numbers() -> dict:
             if len(rows):
                 v[k][var] = dict(b=float(rows.iloc[0].coef), s=rn(float(rows.iloc[0].coef), 2), s3=rn(float(rows.iloc[0].coef), 3),
                                  se=rn(float(rows.iloc[0].se), 3), p=float(rows.iloc[0].p), pct=pct(float(rows.iloc[0].coef)))
+    # диапазон санкционных оценок по столбцам (2)–(6) табл. 1: (ближайшая к нулю, наибольшая по модулю)
+    for yy in ("14", "22"):
+        vals = [v[k][f"sanc{yy}_ij"]["b"] for k in ("s2", "s3", "s4", "s5", "s6")]
+        v[f"rng{yy}"] = (rn(max(vals), 2), rn(min(vals), 2))
     rep = pd.read_csv(RESULTS / "replication_vkr_ols.csv")
     r4 = rep[rep.model == 4].set_index("variable")
     v["vkr"] = {k: dict(b=rn(r4.loc[k, "coef"], 3), s=rn(r4.loc[k, "coef"], 2), se=rn(r4.loc[k, "se"], 3), pct=pct(r4.loc[k, "coef"]),
@@ -176,10 +184,18 @@ def load_numbers() -> dict:
         v[key] = {p: dict(b=rn(sub.loc[p, "elasticity_russia"], 2), se=rn(sub.loc[p, "se"], 2), lo=rn(sub.loc[p, "lo95"], 2),
                           hi=rn(sub.loc[p, "hi95"], 2)) for p in sub.index}
     v["dist_base"] = v["dg0"]["прочие пары (база)"]["b"]
+    dlt = "Δ (2022–24) − (2000–13)"
+    d0 = float(g[(g.spec == "без санкционных индикаторов") & (g.period == dlt)].elasticity_russia.iloc[0])
+    d1 = float(g[(g.spec == "с санкционными индикаторами") & (g.period == dlt)].elasticity_russia.iloc[0])
+    v["dg_share"] = pc(rn(100 * (1 - d1 / d0), 0))
     v["dshift14"] = dict(s=rn(coef("T4 D2 pair FE, shifts, no sanctions", "dist14"), 2), se=rn(coef("T4 D2 pair FE, shifts, no sanctions", "dist14", "se"), 2),
                          s_c=rn(coef("T4 D3 pair FE, shifts, with sanctions", "dist14"), 2), se_c=rn(coef("T4 D3 pair FE, shifts, with sanctions", "dist14", "se"), 2))
     v["dshift22"] = dict(s=rn(coef("T4 D2 pair FE, shifts, no sanctions", "dist22"), 2), se=rn(coef("T4 D2 pair FE, shifts, no sanctions", "dist22", "se"), 2),
                          s_c=rn(coef("T4 D3 pair FE, shifts, with sanctions", "dist22"), 2), se_c=rn(coef("T4 D3 pair FE, shifts, with sanctions", "dist22", "se"), 2))
+
+    v["dshift_sum"] = dict(
+        s=rn(coef("T4 D2 pair FE, shifts, no sanctions", "dist14") + coef("T4 D2 pair FE, shifts, no sanctions", "dist22"), 2),
+        s_c=rn(coef("T4 D3 pair FE, shifts, with sanctions", "dist14") + coef("T4 D3 pair FE, shifts, with sanctions", "dist22"), 2))
 
     # партнёрские сдвиги
     ps = pd.read_csv(RESULTS / "partner_specific_shifts.csv")
@@ -222,6 +238,10 @@ def load_numbers() -> dict:
     v["boot"] = {k: dict(bias=rn(bb.loc[k, "bias"], 3), bias_se=rn(bb.loc[k, "bias_over_se"], 2), sd=rn(bb.loc[k, "boot_sd"], 3),
                          se=rn(bb.loc[k, "se_analytic"], 3), cov=rn(100 * bb.loc[k, "coverage95"], 0)) for k in bb.index}
     v["n_boot"] = si["bootstrap"]["n_boot"]
+    # во сколько раз надо увеличить ст. ошибки, чтобы эмпирическое покрытие стало номинальным (округление до 5 %: 200 повторений)
+    from scipy.stats import norm
+    infl = [100 * (1.96 / norm.ppf((1 + bb.loc[k, "coverage95"]) / 2) - 1) for k in ("sanc14_ij", "sanc22_ij")]
+    v["boot_infl"] = f"{5 * round(float(np.mean(infl)) / 5):.0f}{NBSP}%"
     dy = pd.read_csv(RESULTS / "table2b_dyadic_se.csv")
     d2 = dy[dy.model == "(2) 2009–2024 (основная)"].set_index("variable")
     v["dyad"] = {k: dict(se=rn(d2.loc[k, "se_pair"], 3), sed=rn(d2.loc[k, "se_dyadic"], 3)) for k in d2.index}
