@@ -5,17 +5,25 @@
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 import ppml
-from gravity_common import COALITION_2014, DATA, RESULTS
+from gravity_common import COALITION_2014, DATA, RESULTS, ROOT
 
 CORE = sorted(COALITION_2014)
 
 
 def load_panel(path=None) -> pd.DataFrame:
-    d = pd.read_csv(path or DATA / "gravity_panel.csv")
+    """Гармонизированная панель. Путь можно задать аргументом или переменной окружения GM_PANEL
+    (например, GM_PANEL=data/gravity_panel_updated.csv после code/10_merge_update.py)."""
+    path = path or os.environ.get("GM_PANEL") or DATA / "gravity_panel.csv"
+    if not Path(path).is_absolute():
+        path = ROOT / path if (ROOT / path).exists() else Path(path)
+    d = pd.read_csv(path)
     d["ldist"] = np.log(d["dist"])
     d["ldist_cap"] = np.log(d["dist_cap"])
     d["lgdp_sum"] = np.log(d["gdp_i"]) + np.log(d["gdp_j"])

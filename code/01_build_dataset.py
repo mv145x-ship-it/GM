@@ -110,6 +110,34 @@ def load_geodist(path: Path) -> pd.DataFrame:
 # ----------------------------------------------------------------------------
 # 4. Сборка гармонизированной панели
 # ----------------------------------------------------------------------------
+def add_membership_and_sanctions(p: pd.DataFrame) -> pd.DataFrame:
+    """Парные индикаторы членства и санкций; зависят только от iso3_i, iso3_j и year.
+
+    Используется и при обновлении данных (code/10_merge_update.py), чтобы правила кодировки
+    оставались едиными.
+    """
+    # членство в объединениях (парные индикаторы «обе страны — члены»)
+    for name, span in [("eu_ij", EU_SPAN), ("nato_ij", NATO_SPAN), ("brics_ij", BRICS_SPAN),
+                       ("eaeu_ij", EAEU_SPAN), ("wto_ij", WTO_SPAN)]:
+        p[name] = [both_members(span, a, b, y) for a, b, y in zip(p.iso3_i, p.iso3_j, p.year)]
+
+    # российские пары и санкционные индикаторы
+    p["rus_pair"] = ((p.iso3_i == "RUS") | (p.iso3_j == "RUS")).astype(int)
+    p["partner"] = np.where(p.iso3_i == "RUS", p.iso3_j, np.where(p.iso3_j == "RUS", p.iso3_i, ""))
+    p["partner_group"] = [partner_group(x) if x else "" for x in p.partner]
+    p["partner_subgroup"] = [SUBGROUP_OF.get(x, "") for x in p.partner]
+    # группы «обработки» (не зависят от времени) и санкционные индикаторы (парные × период)
+    p["coal_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2022)).astype(int)   # 15 стран коалиции
+    p["core14_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2014)).astype(int)  # 14 стран «ядра» 2014 г.
+    p["ukr_rus_ij"] = (p.rus_pair.eq(1) & p.partner.eq(UKRAINE)).astype(int)
+    p["sanc14_ij"] = p["core14_rus_ij"] * (p.year >= 2014).astype(int)
+    p["sanc22_ij"] = p["core14_rus_ij"] * (p.year >= 2022).astype(int)   # эскалация 2022 г. для «ядра»
+    p["kor22_ij"] = (p.rus_pair.eq(1) & p.partner.eq("KOR") & (p.year >= 2022)).astype(int)
+    p["ukr14_ij"] = p["ukr_rus_ij"] * (p.year >= 2014).astype(int)
+    p["ukr22_ij"] = p["ukr_rus_ij"] * (p.year >= 2022).astype(int)
+    return p
+
+
 def build_panel(vkr: pd.DataFrame, macro: pd.DataFrame, geo: pd.DataFrame) -> pd.DataFrame:
     # каноническая ориентация пары: iso3_i < iso3_j (торговля симметрична)
     trade = vkr[["iso3_i", "iso3_j", "year", "trade", "pair_id"]].copy()
@@ -137,25 +165,7 @@ def build_panel(vkr: pd.DataFrame, macro: pd.DataFrame, geo: pd.DataFrame) -> pd
     p = p.rename(columns={"distw": "dist_w", "distcap": "dist_cap"})
     p["dist"] = p["dist_w"]  # основная мера расстояния: население-взвешенное (CEPII distw), км
 
-    # членство в объединениях (парные индикаторы «обе страны — члены»)
-    for name, span in [("eu_ij", EU_SPAN), ("nato_ij", NATO_SPAN), ("brics_ij", BRICS_SPAN),
-                       ("eaeu_ij", EAEU_SPAN), ("wto_ij", WTO_SPAN)]:
-        p[name] = [both_members(span, a, b, y) for a, b, y in zip(p.iso3_i, p.iso3_j, p.year)]
-
-    # российские пары и санкционные индикаторы
-    p["rus_pair"] = ((p.iso3_i == "RUS") | (p.iso3_j == "RUS")).astype(int)
-    p["partner"] = np.where(p.iso3_i == "RUS", p.iso3_j, np.where(p.iso3_j == "RUS", p.iso3_i, ""))
-    p["partner_group"] = [partner_group(x) if x else "" for x in p.partner]
-    p["partner_subgroup"] = [SUBGROUP_OF.get(x, "") for x in p.partner]
-    # группы «обработки» (не зависят от времени) и санкционные индикаторы (парные × период)
-    p["coal_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2022)).astype(int)   # 15 стран коалиции
-    p["core14_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2014)).astype(int)  # 14 стран «ядра» 2014 г.
-    p["ukr_rus_ij"] = (p.rus_pair.eq(1) & p.partner.eq(UKRAINE)).astype(int)
-    p["sanc14_ij"] = p["core14_rus_ij"] * (p.year >= 2014).astype(int)
-    p["sanc22_ij"] = p["core14_rus_ij"] * (p.year >= 2022).astype(int)   # эскалация 2022 г. для «ядра»
-    p["kor22_ij"] = (p.rus_pair.eq(1) & p.partner.eq("KOR") & (p.year >= 2022)).astype(int)
-    p["ukr14_ij"] = p["ukr_rus_ij"] * (p.year >= 2014).astype(int)
-    p["ukr22_ij"] = p["ukr_rus_ij"] * (p.year >= 2022).astype(int)
+    p = add_membership_and_sanctions(p)
 
     # индикаторы качества данных
     p = p.sort_values(["pair_id_h", "year"]).reset_index(drop=True)
@@ -288,7 +298,7 @@ def export_excel(vkr_cols: pd.DataFrame, panel: pd.DataFrame, cdf: pd.DataFrame,
     (DATA / "DATA_DICTIONARY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def export_gretl(panel: pd.DataFrame) -> None:
+def export_gretl(panel: pd.DataFrame, suffix: str = "") -> None:
     """Числовая версия панели для gretl (без текстовых переменных; страны — числовые коды)."""
     ids = {iso: k for k, iso in enumerate(sorted(COUNTRIES), start=1)}
     g = panel.copy()
@@ -299,7 +309,7 @@ def export_gretl(panel: pd.DataFrame) -> None:
             "dist", "dist_cap", "contig", "comlang_off", "smctry", "col45", "eu_ij", "nato_ij", "brics_ij", "eaeu_ij",
             "wto_ij", "rus_pair", "coal_rus_ij", "core14_rus_ij", "ukr_rus_ij", "sanc14_ij", "sanc22_ij", "kor22_ij",
             "ukr14_ij", "ukr22_ij", "flag_carry"]
-    g[cols].to_csv(DATA / "gravity_panel_gretl.csv", index=False)
+    g[cols].to_csv(DATA / f"gravity_panel{suffix}_gretl.csv", index=False)
     pd.DataFrame({"id": list(ids.values()), "iso3": list(ids.keys())}).to_csv(DATA / "country_ids_gretl.csv", index=False)
 
 
