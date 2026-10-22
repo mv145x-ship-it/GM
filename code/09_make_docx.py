@@ -151,12 +151,28 @@ def format_tables(doc: Document, font_size: float = 8.5) -> None:
                 set_cell_border(cell, top=top, bottom=bottom, left={"val": "nil"}, right={"val": "nil"})
                 tcPr = cell._tc.get_or_add_tcPr()
                 mar = OxmlElement("w:tcMar")
-                for edge, w in (("top", 30), ("bottom", 30), ("start", 50), ("end", 50)):
+                for edge, w in (("top", 30), ("left", 50), ("bottom", 30), ("right", 50)):   # порядок по схеме OOXML
                     e = OxmlElement(f"w:{edge}")
                     e.set(qn("w:w"), str(w)); e.set(qn("w:type"), "dxa")
                     mar.append(e)
                 tcPr.append(mar)
                 for p in cell.paragraphs:
+                    # формулы (OMML) в ячейках: размер шрифта как у текста таблицы
+                    for mr in p._p.iter(qn("m:r")):
+                        rpr = mr.find(qn("w:rPr"))
+                        if rpr is None:
+                            rpr = OxmlElement("w:rPr")
+                            mrpr = mr.find(qn("m:rPr"))      # порядок по схеме: m:rPr, затем w:rPr
+                            if mrpr is not None:
+                                mrpr.addnext(rpr)
+                            else:
+                                mr.insert(0, rpr)
+                        for tag in ("w:sz", "w:szCs"):
+                            el = rpr.find(qn(tag))
+                            if el is None:
+                                el = OxmlElement(tag)
+                                rpr.append(el)
+                            el.set(qn("w:val"), str(int(font_size * 2)))
                     p.paragraph_format.space_after = Pt(0)
                     p.paragraph_format.space_before = Pt(0)
                     p.paragraph_format.first_line_indent = Cm(0)

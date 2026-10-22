@@ -347,7 +347,19 @@ def build_tables(v: dict) -> dict:
     from data_dictionary import PANEL_VARS
     dd = pd.DataFrame([(a, b, c, d_, e) for a, b, c, d_, e in PANEL_VARS], columns=["Переменная", "Обозначение", "В ВКР", "Единицы", "Описание"])
     dd["Переменная"] = dd["Переменная"].map(lambda s: f"`{s}`")
-    T["ta4"] = md_table(dd[["Переменная", "Обозначение", "В ВКР", "Описание"]], widths=[1.4, 1.0, 1.0, 4.0], align="llll")
+
+    def to_math(s: str) -> str:
+        """Обозначение из словаря (LaTeX-подобная запись) → формула Markdown; «—» и пустые ячейки не трогаем."""
+        s = str(s).strip()
+        if s in ("", "—"):
+            return s
+        s = re.sub(r"([A-Z][A-Z0-9]+)(?=[_^])", r"\\text{\1}", s).replace(", ", ",\\; ")
+        s = re.sub(r"\^\{([a-z]{2,})\}", r"^{\\text{\1}}", s)
+        return f"${s}$"
+    dd["Обозначение"] = dd["Обозначение"].map(to_math)
+    dd["Описание"] = dd["Описание"].map(
+        lambda t: re.sub(r"([A-Z][A-Z0-9]+)((?:\^\{[^}]*\})?_\{[^}]*\})", r"$\\text{\1}\2$", str(t)))
+    T["ta4"] = md_table(dd[["Переменная", "Обозначение", "В ВКР", "Описание"]], widths=[1.4, 1.7, 1.0, 3.6], align="llll")
     return T
 
 
