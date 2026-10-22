@@ -1,0 +1,22 @@
+{
+ "permutation": {
+  "n_perm": 500,
+  "obs_sanc14": -0.4187106599227618,
+  "obs_sanc22": -1.547743539510493,
+  "perm_sd_sanc14": 0.13791231521675543,
+  "perm_sd_sanc22": 0.5964366133288791,
+  "perm_p_two_sided_sanc14": 0.001996007984031936,
+  "perm_p_two_sided_sanc22": 0.001996007984031936,
+  "perm_p_one_sided_sanc14": 0.001996007984031936,
+  "perm_p_one_sided_sanc22": 0.001996007984031936,
+  "perm_q05_sanc14": -0.23328644212606867,
+  "perm_q95_sanc14": 0.20469831057420754,
+  "perm_q05_sanc22": -0.967410521657921,
+  "perm_q95_sanc22": 1.004644084366977
+ },
+ "bootstrap": {
+  "n_boot": 200,
+  "resid_ratio_sd": 0.49559850609304046,
+  "max_abs_bias_over_se": 0.7877238594661543
+ }
+}

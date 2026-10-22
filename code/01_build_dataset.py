@@ -147,11 +147,15 @@ def build_panel(vkr: pd.DataFrame, macro: pd.DataFrame, geo: pd.DataFrame) -> pd
     p["partner"] = np.where(p.iso3_i == "RUS", p.iso3_j, np.where(p.iso3_j == "RUS", p.iso3_i, ""))
     p["partner_group"] = [partner_group(x) if x else "" for x in p.partner]
     p["partner_subgroup"] = [SUBGROUP_OF.get(x, "") for x in p.partner]
-    p["coal_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2022)).astype(int)  # группа «обработки»
-    p["sanc14_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2014) & (p.year >= 2014)).astype(int)
-    p["sanc22_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2022) & (p.year >= 2022)).astype(int)
-    p["ukr14_ij"] = (p.rus_pair.eq(1) & p.partner.eq(UKRAINE) & (p.year >= 2014)).astype(int)
-    p["ukr22_ij"] = (p.rus_pair.eq(1) & p.partner.eq(UKRAINE) & (p.year >= 2022)).astype(int)
+    # группы «обработки» (не зависят от времени) и санкционные индикаторы (парные × период)
+    p["coal_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2022)).astype(int)   # 15 стран коалиции
+    p["core14_rus_ij"] = (p.rus_pair.eq(1) & p.partner.isin(COALITION_2014)).astype(int)  # 14 стран «ядра» 2014 г.
+    p["ukr_rus_ij"] = (p.rus_pair.eq(1) & p.partner.eq(UKRAINE)).astype(int)
+    p["sanc14_ij"] = p["core14_rus_ij"] * (p.year >= 2014).astype(int)
+    p["sanc22_ij"] = p["core14_rus_ij"] * (p.year >= 2022).astype(int)   # эскалация 2022 г. для «ядра»
+    p["kor22_ij"] = (p.rus_pair.eq(1) & p.partner.eq("KOR") & (p.year >= 2022)).astype(int)
+    p["ukr14_ij"] = p["ukr_rus_ij"] * (p.year >= 2014).astype(int)
+    p["ukr22_ij"] = p["ukr_rus_ij"] * (p.year >= 2022).astype(int)
 
     # индикаторы качества данных
     p = p.sort_values(["pair_id_h", "year"]).reset_index(drop=True)
@@ -164,7 +168,7 @@ def build_panel(vkr: pd.DataFrame, macro: pd.DataFrame, geo: pd.DataFrame) -> pd
             "dist", "dist_cap", "contig", "comlang_off", "comlang_ethno", "colony", "comcol", "col45", "smctry",
             "eu_ij", "nato_ij", "brics_ij", "eaeu_ij", "wto_ij",
             "rus_pair", "partner", "partner_group", "partner_subgroup",
-            "coal_rus_ij", "sanc14_ij", "sanc22_ij", "ukr14_ij", "ukr22_ij",
+            "coal_rus_ij", "core14_rus_ij", "ukr_rus_ij", "sanc14_ij", "sanc22_ij", "kor22_ij", "ukr14_ij", "ukr22_ij",
             "flag_carry", "trade_src"]
     p = p[cols].rename(columns={"pair_id_h": "pair_id"})
     # названия стран для удобства чтения
