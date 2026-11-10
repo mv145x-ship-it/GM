@@ -1,0 +1,28 @@
+{
+ "wdi": {
+  "fetched_at_utc": "2026-11-10T18:04:14+00:00",
+  "params": {
+   "start": 2000,
+   "end": 2025,
+   "indicators": {
+    "NY.GDP.MKTP.CD": "gdp_usd",
+    "SP.POP.TOTL": "pop",
+    "NY.GDP.PCAP.CD": "gdppc_usd"
+   }
+  },
+  "n_rows": 832
+ },
+ "weo": {
+  "fetched_at_utc": "2026-11-10T18:05:27+00:00",
+  "params": {
+   "start": 2000,
+   "end": 2026,
+   "indicators": {
+    "NGDPD": "gdp_usd_bn",
+    "LP": "pop_m",
+    "NGDPDPC": "gdppc_usd"
+   }
+  },
+  "n_rows": 864
+ }
+}
