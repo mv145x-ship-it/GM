@@ -257,7 +257,7 @@ def load_numbers() -> dict:
     v["desc"] = dict(tot={int(y): rn(x, 0) for y, x in tot_y.items()}, share={int(y): rn(x, 0) for y, x in sh.items()},
                      wd={int(y): rn(x, 1) for y, x in wd.items()},
                      coal={int(y): rn(x, 0) for y, x in byy["coalition"].items()}, other={int(y): rn(x, 0) for y, x in byy["other"].items()})
-    v["desc"]["wd_delta"] = rn(wd.loc[2025] - wd.loc[2000], 1)
+    v["desc"]["wd_delta"] = rn(wd.loc[2024] - wd.loc[2000], 1)      # 2025 г. несопоставим: нет Беларуси, ОАЭ, Украины
     v["n_pairs"], v["n_countries"], v["n_years"] = d.pair_id.nunique(), len(COUNTRIES), d.year.nunique()
     v["n_obs"] = f"{len(d):,}".replace(",", NBSP)
     # обновление данных (code/10_merge_update.py)
