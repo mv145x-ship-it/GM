@@ -260,6 +260,18 @@ def load_numbers() -> dict:
     v["desc"]["wd_delta"] = rn(wd.loc[2025] - wd.loc[2000], 1)
     v["n_pairs"], v["n_countries"], v["n_years"] = d.pair_id.nunique(), len(COUNTRIES), d.year.nunique()
     v["n_obs"] = f"{len(d):,}".replace(",", NBSP)
+    # обновление данных (code/10_merge_update.py)
+    ur = pd.read_csv(DATA / "update_report.csv").set_index("показатель")["значение"]
+    chk, conf = [int(x) for x in ur[[k for k in ur.index if k.startswith("прежних значений сверено")][0]].split(" / ")]
+    v["upd"] = dict(new=int(ur[[k for k in ur.index if k.startswith("новых наблюдений")][0]]),
+                    replaced=int(ur[[k for k in ur.index if k.startswith("заменено")][0]]), checked=chk, confirmed=conf,
+                    conf_share=rn(100 * conf / chk, 0), n25=int((d.year == 2025).sum()),
+                    miss25=int(d.pair_id.nunique() - (d.year == 2025).sum()),
+                    rus25=int(((d.year == 2025) & (d.rus_pair == 1)).sum()))
+    dl = np.log(d.sort_values(["pair_id", "year"]).set_index(["pair_id", "year"]).trade).groupby(level=0).diff()
+    nr = d.sort_values(["pair_id", "year"]).rus_pair.values == 0
+    j22 = (dl.values[nr & (d.sort_values(["pair_id", "year"]).year.values == 2022)])
+    v["upd"]["jump22"] = rn(100 * float((np.abs(j22) > 1).mean()), 1)
     # аудит данных
     qr = pd.read_csv(DATA / "data_quality_report.csv")
     v["q_dist_n"] = int(qr[qr.variable == "dist_vkr"].n_obs_or_pairs.iloc[0])
@@ -276,7 +288,8 @@ def build_tables(v: dict) -> dict:
     T: dict = {}
     # Таблица 1
     t1 = read_wide("table1_specification_path")
-    t1 = t1.rename(columns={"variable": "Переменная"})
+    t1 = t1.rename(columns={"variable": "Переменная", "(1) ВКР: МНК (модель 4)": "(1) Исходная модель: МНК, 2000–2024"})
+    t1["Переменная"] = t1["Переменная"].str.replace("(ВКР)", "(исходная модель)", regex=False)
     T["t1"] = md_table(t1, widths=[2.6, 1.3, 1.3, 1.3, 1.5, 1.4, 1.6])
     # Таблица 2
     t2 = read_wide("table2_main_did").rename(columns={"variable": "Переменная"})
@@ -318,6 +331,7 @@ def build_tables(v: dict) -> dict:
     qr = pd.read_csv(DATA / "data_quality_report.csv")
     qa = qr[["issue", "variable", "details", "n_obs_or_pairs"]].copy()
     qa.columns = ["Дефект", "Переменная", "Описание", "Кол-во"]
+    qa["Дефект"] = qa["Дефект"].str.replace("расстояния ВКР", "расстояния исходного набора", regex=False)
     T["ta1"] = md_table(qa, widths=[2.4, 1.0, 3.4, 0.6], align="llll")
     # Приложение: состав групп
     rows = []
@@ -347,7 +361,7 @@ def build_tables(v: dict) -> dict:
     T["ta3"] = md_table(pd.DataFrame(rows), widths=[1.6, 0.9, 0.7, 0.7, 0.7, 1.0, 1.0, 1.0, 1.0], align="llcccccc" + "c")
     # Приложение: словарь переменных (краткий)
     from data_dictionary import PANEL_VARS
-    dd = pd.DataFrame([(a, b, c, d_, e) for a, b, c, d_, e in PANEL_VARS], columns=["Переменная", "Обозначение", "В ВКР", "Единицы", "Описание"])
+    dd = pd.DataFrame([(a, b, c, d_, e) for a, b, c, d_, e in PANEL_VARS], columns=["Переменная", "Обозначение", "В исходном наборе", "Единицы", "Описание"])
     dd["Переменная"] = dd["Переменная"].map(lambda s: f"`{s}`")
 
     def to_math(s: str) -> str:
@@ -361,7 +375,7 @@ def build_tables(v: dict) -> dict:
     dd["Обозначение"] = dd["Обозначение"].map(to_math)
     dd["Описание"] = dd["Описание"].map(
         lambda t: re.sub(r"([A-Z][A-Z0-9]+)((?:\^\{[^}]*\})?_\{[^}]*\})", r"$\\text{\1}\2$", str(t)))
-    T["ta4"] = md_table(dd[["Переменная", "Обозначение", "В ВКР", "Описание"]], widths=[1.4, 1.7, 1.0, 3.6], align="llll")
+    T["ta4"] = md_table(dd[["Переменная", "Обозначение", "В исходном наборе", "Описание"]], widths=[1.4, 1.7, 1.0, 3.6], align="llll")
     return T
 
 

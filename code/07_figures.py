@@ -135,7 +135,7 @@ def fig2_spec_path():
     rep = pd.read_csv(RESULTS / "replication_vkr_ols.csv")
     v4 = rep[rep.model == 4].set_index("variable")
     specs = [
-        ("(1) МНК ВКР: временные дамми", None),
+        ("(1) Исходная модель: индикаторы периодов", None),
         ("(2) МНК ln T, год. ЭФ", "T1 (2) МНК, ln T, год. ЭФ"),
         ("(3) PPML, год. ЭФ", "T1 (3) PPML, год. ЭФ"),
         ("(4) PPML, страновые + год. ЭФ", "T1 (4) PPML, страновые + год. ЭФ"),
@@ -350,9 +350,9 @@ def figA1_data_quality(d: pd.DataFrame):
     lim = [50, 22000]
     ax.plot(lim, lim, color=INK2, lw=0.8)
     ax.set_xscale("log"); ax.set_yscale("log"); ax.set_xlim(lim); ax.set_ylim(lim)
-    ax.set_xlabel("Расстояние между столицами, CEPII, км"); ax.set_ylabel("Расстояние в файле ВКР, км")
+    ax.set_xlabel("Расстояние между столицами, CEPII, км"); ax.set_ylabel("Расстояние в исходном наборе, км")
     style_axes(ax, "both")
-    ax.set_title("б) Расстояния ВКР и CEPII", loc="left", color=INK, fontsize=8.5)
+    ax.set_title("б) Расстояния исходного набора и CEPII", loc="left", color=INK, fontsize=8.5)
     for _, r in m[(m.ratio > 1.6) | (m.ratio < 0.74)].iterrows():
         ax.annotate(f"{r.k[0]}–{r.k[1]}", (r.dist_cap, r.dist_vkr), fontsize=6.8, color=INK2, xytext=(5, -2),
                     textcoords="offset points")
