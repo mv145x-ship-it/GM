@@ -1,4 +1,4 @@
-"""Сборка рукописи: шаблон (paper/article_template.md, Jinja2) + результаты → Markdown → DOCX.
+"""Сборка рукописи статьи 2: шаблон (paper/parts_a2/*.md, Jinja2) + результаты → Markdown → DOCX.
 
 Все числа в тексте и таблицах подставляются из results/*.csv|json, поэтому после
 обновления данных и повторного запуска конвейера (см. README) рукопись
@@ -93,7 +93,7 @@ def load_numbers() -> dict:
         row = long[(long.model == model) & (long.variable == var)]
         return float(row.iloc[0][col])
 
-    main_model = "T2 (2) 2009–2024 (основная)"
+    main_model = "T2 (2) 2009–2025 (основная)"
     v["main"] = {k.replace("main_", ""): vv for k, vv in sm.items() if k.startswith("main_") and isinstance(vv, dict)}
     for var in ["sanc14_ij", "sanc22_ij", "kor22_ij", "ukr14_ij", "ukr22_ij", "eu_ij", "wto_ij", "eaeu_ij", "nato_ij", "brics_ij"]:
         v[var] = dict(b=coef(main_model, var), se=coef(main_model, var, "se"), p=coef(main_model, var, "p"))
@@ -113,8 +113,8 @@ def load_numbers() -> dict:
     v["nobs_main"] = f"{sm['main_nobs']:,}".replace(",", NBSP)
 
     # другие спецификации Таблицы 2
-    for key, model in {"w00": "T2 (1) 2000–2024", "w09_21": "T2 (3) 2009–2021", "trans": "T2 (4) 2014 — переходный год",
-                       "clean": "T2 (5) «чистая» выборка", "pret": "T2 (6) 2000–2024, пре-тренд", "ols": "T2 (7) МНК ln T"}.items():
+    for key, model in {"w00": "T2 (1) 2000–2025", "w09_21": "T2 (3) 2009–2021", "trans": "T2 (4) 2014 — переходный год",
+                       "clean": "T2 (5) «чистая» выборка", "pret": "T2 (6) 2000–2025, пре-тренд", "ols": "T2 (7) МНК ln T"}.items():
         v[key] = {}
         for var in ["sanc14_ij", "sanc22_ij", "kor22_ij"]:
             rows = long[(long.model == model) & (long.variable == var)]
@@ -152,15 +152,15 @@ def load_numbers() -> dict:
 
     # event study
     ev = pd.read_csv(RESULTS / "event_study_main.csv")
-    e00 = ev[(ev.window == "2000-2024") & ev.group.str.contains("коалиция")].set_index("year")
+    e00 = ev[(ev.window == "2000-2025") & ev.group.str.contains("коалиция")].set_index("year")
     v["ev"] = {int(y): dict(b=rn(r.coef, 2), pct=pct(r.coef), raw=r.coef) for y, r in e00.iterrows()}
     v["ev_pre_mean_2000_03"] = rn(e00.loc[2000:2003, "coef"].mean(), 2)
-    v["pretrend_full"] = se_["pretrend_wald_2000-2024"]
+    v["pretrend_full"] = se_["pretrend_wald_2000-2025"]
     v["pretrend_09"] = se_["pretrend_wald_2009_2012"]
-    _pf = se_["pretrend_wald_2000-2024"]
+    _pf = se_["pretrend_wald_2000-2025"]
     v["pretrend_full_s"] = f"χ²({_pf['df']}) = {rn(_pf['chi2'], 1)}, p {'< 0,001' if _pf['p'] < 0.001 else '= ' + rn(_pf['p'], 3)}"
     v["pretrend_09_s"] = f"χ²({se_['pretrend_wald_2009_2012']['df']}) = {rn(se_['pretrend_wald_2009_2012']['chi2'], 2)}, p = {rn(se_['pretrend_wald_2009_2012']['p'], 2)}"
-    eu_ = ev[(ev.window == "2000-2024") & ev.group.str.contains("Украина")].set_index("year")
+    eu_ = ev[(ev.window == "2000-2025") & ev.group.str.contains("Украина")].set_index("year")
     v["evu"] = {int(y): dict(b=rn(r.coef, 2), pct=pct(r.coef)) for y, r in eu_.iterrows()}
 
     # подгруппы коалиции (T3 coalition subgroups)
@@ -184,7 +184,7 @@ def load_numbers() -> dict:
         v[key] = {p: dict(b=rn(sub.loc[p, "elasticity_russia"], 2), se=rn(sub.loc[p, "se"], 2), lo=rn(sub.loc[p, "lo95"], 2),
                           hi=rn(sub.loc[p, "hi95"], 2)) for p in sub.index}
     v["dist_base"] = v["dg0"]["прочие пары (база)"]["b"]
-    dlt = "Δ (2022–24) − (2000–13)"
+    dlt = "Δ (2022–25) − (2000–13)"
     d0 = float(g[(g.spec == "без санкционных индикаторов") & (g.period == dlt)].elasticity_russia.iloc[0])
     d1 = float(g[(g.spec == "с санкционными индикаторами") & (g.period == dlt)].elasticity_russia.iloc[0])
     v["dg_share"] = pc(rn(100 * (1 - d1 / d0), 0))
@@ -211,17 +211,17 @@ def load_numbers() -> dict:
     alts = cf[cf.spec.str.startswith(("основной", "альт"))]
     rng = {}
     for grp in ("coalition", "other", "ukraine"):
-        for yr in (2021, 2024):
+        for yr in (2021, 2025):
             x = alts[(alts.group == grp) & (alts.year == yr)].ratio
             rng[(grp, yr)] = (rn(x.min(), 2), rn(x.max(), 2))
     v["cf_range"] = rng
     # суммарные величины и доля компенсации
-    tot_act = {p: sum(float(agg[(agg.group == g_) & (agg.period == p)].actual_bn.iloc[0]) for g_ in ("coalition", "other", "ukraine")) for p in ("2014–2021", "2022–2024")}
-    tot_pred = {p: sum(float(agg[(agg.group == g_) & (agg.period == p)].predicted_bn.iloc[0]) for g_ in ("coalition", "other", "ukraine")) for p in ("2014–2021", "2022–2024")}
+    tot_act = {p: sum(float(agg[(agg.group == g_) & (agg.period == p)].actual_bn.iloc[0]) for g_ in ("coalition", "other", "ukraine")) for p in ("2014–2021", "2022–2025")}
+    tot_pred = {p: sum(float(agg[(agg.group == g_) & (agg.period == p)].predicted_bn.iloc[0]) for g_ in ("coalition", "other", "ukraine")) for p in ("2014–2021", "2022–2025")}
     v["cf_total"] = {p: dict(actual=rn(tot_act[p], 0), pred=rn(tot_pred[p], 0), gap=rn(tot_act[p] - tot_pred[p], 0),
                              gap_abs=rn(abs(tot_act[p] - tot_pred[p]), 0), share=rn(100 * (tot_act[p] / tot_pred[p] - 1), 0)) for p in tot_act}
     comp = {}
-    for p in ("2014–2021", "2022–2024"):
+    for p in ("2014–2021", "2022–2025"):
         loss = -(float(agg[(agg.group == "coalition") & (agg.period == p)].gap_bn.iloc[0]) + float(agg[(agg.group == "ukraine") & (agg.period == p)].gap_bn.iloc[0]))
         gain = float(agg[(agg.group == "other") & (agg.period == p)].gap_bn.iloc[0])
         comp[p] = dict(loss=rn(loss, 0), gain=rn(gain, 0), share=rn(100 * gain / loss, 0))
@@ -243,7 +243,7 @@ def load_numbers() -> dict:
     infl = [100 * (1.96 / norm.ppf((1 + bb.loc[k, "coverage95"]) / 2) - 1) for k in ("sanc14_ij", "sanc22_ij")]
     v["boot_infl"] = f"{5 * round(float(np.mean(infl)) / 5):.0f}{NBSP}%"
     dy = pd.read_csv(RESULTS / "table2b_dyadic_se.csv")
-    d2 = dy[dy.model == "(2) 2009–2024 (основная)"].set_index("variable")
+    d2 = dy[dy.model == "(2) 2009–2025 (основная)"].set_index("variable")
     v["dyad"] = {k: dict(se=rn(d2.loc[k, "se_pair"], 3), sed=rn(d2.loc[k, "se_dyadic"], 3)) for k in d2.index}
 
     # описательные числа
@@ -257,7 +257,7 @@ def load_numbers() -> dict:
     v["desc"] = dict(tot={int(y): rn(x, 0) for y, x in tot_y.items()}, share={int(y): rn(x, 0) for y, x in sh.items()},
                      wd={int(y): rn(x, 1) for y, x in wd.items()},
                      coal={int(y): rn(x, 0) for y, x in byy["coalition"].items()}, other={int(y): rn(x, 0) for y, x in byy["other"].items()})
-    v["desc"]["wd_delta"] = rn(wd.loc[2024] - wd.loc[2000], 1)
+    v["desc"]["wd_delta"] = rn(wd.loc[2025] - wd.loc[2000], 1)
     v["n_pairs"], v["n_countries"], v["n_years"] = d.pair_id.nunique(), len(COUNTRIES), d.year.nunique()
     v["n_obs"] = f"{len(d):,}".replace(",", NBSP)
     # аудит данных
@@ -298,7 +298,7 @@ def build_tables(v: dict) -> dict:
     for r in agg.itertuples():
         rows.append({"Группа": name[r.group], "Период": r.period, "Факт, млрд долл.": rn(r.actual_bn, 0), "Ориентир, млрд долл.": rn(r.predicted_bn, 0),
                      "Разрыв, млрд долл.": rn(r.gap_bn, 0, sign=True), "Факт / ориентир": rn(r.ratio, 2)})
-    for p in ("2014–2021", "2022–2024"):
+    for p in ("2014–2021", "2022–2025"):
         tt = v["cf_total"][p]
         rows.append({"Группа": "Всего (31 партнёр)", "Период": p, "Факт, млрд долл.": tt["actual"], "Ориентир, млрд долл.": tt["pred"],
                      "Разрыв, млрд долл.": tt["gap"], "Факт / ориентир": rn(float(tt["actual"].replace(MINUS, "-").replace(",", ".").replace(NBSP, "")) /
@@ -337,11 +337,11 @@ def build_tables(v: dict) -> dict:
     for p in sorted(piv.index, key=lambda x: RU_NAME[x]):
         grp = "коалиция" if p in COALITION_2022 else ("Украина" if p == "UKR" else "прочие")
         s2 = ps[(ps.partner == p) & (ps.period == "2014–2021")].iloc[0]
-        s3 = ps[(ps.partner == p) & (ps.period == "2022–2024")].iloc[0]
+        s3 = ps[(ps.partner == p) & (ps.period == "2022–2025")].iloc[0]
         r21 = cfp[(cfp.partner == p) & (cfp.year == 2021)].ratio.iloc[0]
-        r24 = cfp[(cfp.partner == p) & (cfp.year == 2024)].ratio.iloc[0]
-        rows.append({"Партнёр": RU_NAME[p], "Группа": grp, "2013": rn(piv.loc[p, 2013], 1), "2021": rn(piv.loc[p, 2021], 1), "2024": rn(piv.loc[p, 2024], 1),
-                     "Сдвиг 2014–21": rn(s2.coef, 2), "Сдвиг 2022–24": rn(s3.coef, 2), "Факт/ор. 2021": rn(r21, 2), "Факт/ор. 2024": rn(r24, 2)})
+        r24 = cfp[(cfp.partner == p) & (cfp.year == 2025)].ratio.iloc[0]
+        rows.append({"Партнёр": RU_NAME[p], "Группа": grp, "2013": rn(piv.loc[p, 2013], 1), "2021": rn(piv.loc[p, 2021], 1), "2025": rn(piv.loc[p, 2025], 1),
+                     "Сдвиг 2014–21": rn(s2.coef, 2), "Сдвиг 2022–25": rn(s3.coef, 2), "Факт/ор. 2021": rn(r21, 2), "Факт/ор. 2025": rn(r24, 2)})
     T["ta3"] = md_table(pd.DataFrame(rows), widths=[1.6, 0.9, 0.7, 0.7, 0.7, 1.0, 1.0, 1.0, 1.0], align="llcccccc" + "c")
     # Приложение: словарь переменных (краткий)
     from data_dictionary import PANEL_VARS
@@ -367,8 +367,8 @@ def build_tables(v: dict) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-docx", action="store_true")
-    ap.add_argument("--template", default=None, help="по умолчанию — склейка paper/parts/*.md")
-    ap.add_argument("--out", default="article_ru")
+    ap.add_argument("--template", default=None, help="по умолчанию — склейка paper/parts_a2/*.md")
+    ap.add_argument("--out", default="article2_ru")
     args = ap.parse_args()
 
     v = load_numbers()
@@ -384,7 +384,7 @@ def main() -> None:
     if args.template:
         src = open(args.template, encoding="utf-8").read()
     else:
-        parts = sorted((PAPER / "parts").glob("*.md"))
+        parts = sorted((PAPER / "parts_a2").glob("*.md"))
         src = "\n\n".join(open(f, encoding="utf-8").read().strip("\n") for f in parts)
     tpl = env.from_string(src)
     md = tpl.render(v=v, T=T, NBSP=NBSP, MINUS=MINUS)

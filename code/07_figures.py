@@ -97,7 +97,7 @@ def fig1_descriptive(d: pd.DataFrame):
         ax.bar(years, g[key].values, bottom=bottom, width=0.72, color=col, label=lab, linewidth=0.8, edgecolor=SURFACE)
         bottom += g[key].values
     ax.set_ylabel("Товарооборот, млрд долл. США")
-    ax.set_xlim(1999.3, 2024.7); ax.set_ylim(0, 640)
+    ax.set_xlim(1999.3, 2025.7); ax.set_ylim(0, 640)
     style_axes(ax)
     period_lines(ax, labels=True, ytop=615)
     ax.legend(frameon=False, loc="upper left", ncol=3, bbox_to_anchor=(0.0, 1.14), handlelength=1.2)
@@ -123,7 +123,7 @@ def fig1_descriptive(d: pd.DataFrame):
     period_lines(ax3); style_axes(ax3)
     ax3.set_title("в) Средневзвешенное расстояние до партнёров", loc="left", color=INK)
     for a in (ax, ax2, ax3):
-        a.set_xticks([2000, 2005, 2010, 2015, 2020, 2024])
+        a.set_xticks([2000, 2005, 2010, 2015, 2020, 2025])
     out = g.copy(); out["total"] = tot; out["share_coalition_pct"] = share; out["wavg_dist_thousand_km"] = wdist
     save(fig, "fig1_descriptive", out.reset_index())
     return out
@@ -177,7 +177,7 @@ def fig2_spec_path():
 # ================================================================ Рис. 3
 def fig3_event_study():
     ev = pd.read_csv(RESULTS / "event_study_main.csv")
-    ev = ev[ev.window == "2000-2024"]
+    ev = ev[ev.window == "2000-2025"]
     coal = ev[ev.group.str.contains("коалиция")].copy()
     ukr = ev[ev.group.str.contains("Украина")].copy()
 
@@ -197,12 +197,12 @@ def fig3_event_study():
         ax.axhline(0, color=INK2, lw=0.8)
         period_lines(ax)
         ax.set_ylim(*ylim); ax.set_xlim(1999.3, 2027.6)
-        ax.set_xticks([2000, 2005, 2010, 2015, 2020, 2024]); style_axes(ax)
+        ax.set_xticks([2000, 2005, 2010, 2015, 2020, 2025]); style_axes(ax)
         ax.set_title(title, loc="left", color=INK, fontsize=8.5)
         ax.set_ylabel("Лог. пункты относительно 2013 г.")
         last = df.iloc[-1]
-        end_dot(ax, 2024, last.coef, col)
-        ax.text(2024.7, last.coef, MINUS(f"{100*(np.exp(last.coef)-1):.0f}%"), fontsize=8, color=INK, va="center")
+        end_dot(ax, 2025, last.coef, col)
+        ax.text(2025.7, last.coef, MINUS(f"{100*(np.exp(last.coef)-1):.0f}%"), fontsize=8, color=INK, va="center")
     axes[0].text(2009.0, -3.3, "окно «параллельных\nтрендов»", fontsize=7.2, color=INK2, va="bottom")
     save(fig, "fig3_event_study", pd.concat([coal.assign(group="coalition"), ukr.assign(group="ukraine")]))
 
@@ -227,7 +227,7 @@ def fig4_subgroups():
         ax.plot(df.year, df.coef, ls="none", marker="o", ms=2.4, color=col, mew=0)
         ax.axhline(0, color=INK2, lw=0.7)
         period_lines(ax)
-        ax.set_xlim(2008.3, 2024.7); ax.set_xticks([2010, 2016, 2022])
+        ax.set_xlim(2008.3, 2025.7); ax.set_xticks([2010, 2016, 2022])
         ax.set_title(title, loc="left", fontsize=7.8, color=INK)
         style_axes(ax)
     for row in (row0, row1):
@@ -247,11 +247,11 @@ def fig4_subgroups():
 def fig5_partner_shifts():
     ps = pd.read_csv(RESULTS / "partner_specific_shifts.csv")
     ps["grp"] = ps.partner.map(lambda p: "coalition" if p in COALITION_2022 else ("ukraine" if p == "UKR" else "other"))
-    order = ps[ps.period == "2022–2024"].sort_values("coef").partner.tolist()
+    order = ps[ps.period == "2022–2025"].sort_values("coef").partner.tolist()
     ys = {p: k for k, p in enumerate(order)}
     colmap = {"coalition": C_COAL, "other": C_OTHER, "ukraine": C_UKR}
     fig, axes = plt.subplots(1, 2, figsize=(W, 6.0), sharey=True, gridspec_kw={"wspace": 0.06})
-    for ax, per, xlim in zip(axes, ["2014–2021", "2022–2024"], [(-1.2, 1.1), (-4.6, 4.0)]):
+    for ax, per, xlim in zip(axes, ["2014–2021", "2022–2025"], [(-1.2, 1.1), (-4.6, 4.0)]):
         sub = ps[ps.period == per]
         for _, r in sub.iterrows():
             y = ys[r.partner]; col = colmap[r.grp]
@@ -282,13 +282,13 @@ def fig6_counterfactual():
         ax.plot(m.year, m.pred / 1e3, color=C_GRAY, lw=1.6)
         ax.plot(m.year, m.trade / 1e3, color=col, lw=1.7)
         ax.plot(m.year, m.trade / 1e3, ls="none", marker="o", ms=3.0, color=col, mew=0)
-        ax.set_xlim(2013.5, 2026.4); ax.set_xticks([2014, 2016, 2018, 2020, 2022, 2024])
+        ax.set_xlim(2013.5, 2027.4); ax.set_xticks([2014, 2016, 2018, 2020, 2022, 2025])
         ax.axvline(2021.5, color=AXIS, lw=0.8)
         style_axes(ax); ax.set_ylim(bottom=0)
         ax.set_ylabel("Млрд долл. США"); ax.set_title(title, loc="left", color=INK)
         last = m.iloc[-1]
-        end_dot(ax, 2024, last.trade / 1e3, col)
-        ax.text(2024.5, last.trade / 1e3, f"{last.trade / last.pred:.2f}×".replace(".", ","), fontsize=8, color=INK, va="center")
+        end_dot(ax, 2025, last.trade / 1e3, col)
+        ax.text(2025.5, last.trade / 1e3, f"{last.trade / last.pred:.2f}×".replace(".", ","), fontsize=8, color=INK, va="center")
     handles = [Line2D([0], [0], color=C_GRAY, lw=1.7, label="Гравитационный ориентир (основная спецификация)"),
                mpl.patches.Patch(facecolor=C_GRAY, alpha=0.25, label="Диапазон спецификаций ориентира"),
                Line2D([0], [0], color=INK2, lw=1.7, marker="o", ms=3.5, label="Фактический оборот (цвет группы)")]
@@ -300,7 +300,7 @@ def fig6_counterfactual():
 def fig7_distance():
     g = pd.read_csv(RESULTS / "table4_distance_gradient.csv")
     fig, ax = plt.subplots(figsize=(W * 0.82, 2.9))
-    periods = ["2000–2013", "2014–2021", "2022–2024"]
+    periods = ["2000–2013", "2014–2021", "2022–2025"]
     xs = np.arange(3)
     for spec, col, off, mk in [("без санкционных индикаторов", C_COAL, -0.11, "o"),
                                ("с санкционными индикаторами", C_OTHER, 0.11, "s")]:

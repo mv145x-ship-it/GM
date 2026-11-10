@@ -65,7 +65,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 1) Основной event study
     # ------------------------------------------------------------------
-    for window, y0 in [("2000-2024", 2000), ("2009-2024", 2009)]:
+    for window, y0 in [("2000-2025", 2000), ("2009-2025", 2009)]:
         dd = d[d.year >= y0].copy()
         years = [y for y in range(y0, 2025) if y != 2013]
         cols = event_dummies(dd, dd.core14_rus_ij.eq(1), "coal", years)
@@ -77,7 +77,7 @@ def main() -> None:
         pre = [f"coal_{y}" for y in years if y <= 2012]
         w, k, p = wald(r, pre)
         summary[f"pretrend_wald_{window}"] = {"chi2": w, "df": k, "p": p}
-        if window == "2009-2024":
+        if window == "2009-2025":
             pre2 = [f"coal_{y}" for y in (2009, 2010, 2011, 2012)]
             w, k, p = wald(r, pre2)
             summary["pretrend_wald_2009_2012"] = {"chi2": w, "df": k, "p": p}
@@ -85,7 +85,7 @@ def main() -> None:
     pd.concat(out_event, ignore_index=True).to_csv(RESULTS / "event_study_main.csv", index=False)
 
     # ------------------------------------------------------------------
-    # 2) Event study по подгруппам (окно 2009–2024)
+    # 2) Event study по подгруппам (окно 2009–2025)
     # ------------------------------------------------------------------
     dd = d[d.year >= 2009].copy()
     years = [y for y in range(2009, 2025) if y != 2013]
@@ -103,7 +103,7 @@ def main() -> None:
         cols += event_dummies(dd, rus.loc[dd.index] & m, tag, years)
     covs = cols + ["kor22_ij"] + POLICY
     r = fit_model(dd, covs, "cy+pair")
-    ev2 = pd.concat([tidy_event(r, tag, years, name, "2009-2024, база: ARG, BRA, IDN, MEX, ZAF") for name, tag in tags.items()],
+    ev2 = pd.concat([tidy_event(r, tag, years, name, "2009-2025, база: ARG, BRA, IDN, MEX, ZAF") for name, tag in tags.items()],
                     ignore_index=True)
     ev2.to_csv(RESULTS / "event_study_subgroups.csv", index=False)
 
@@ -146,9 +146,9 @@ def main() -> None:
     # агрегаты: суммарные «недополученные» / «избыточные» потоки (млрд долл.)
     main = cf[cf.spec.str.startswith("основной")]
     agg = []
-    for (g, lo, hi, lab) in [("coalition", 2014, 2021, "2014–2021"), ("coalition", 2022, 2024, "2022–2024"),
-                              ("other", 2014, 2021, "2014–2021"), ("other", 2022, 2024, "2022–2024"),
-                              ("ukraine", 2014, 2021, "2014–2021"), ("ukraine", 2022, 2024, "2022–2024")]:
+    for (g, lo, hi, lab) in [("coalition", 2014, 2021, "2014–2021"), ("coalition", 2022, 2025, "2022–2025"),
+                              ("other", 2014, 2021, "2014–2021"), ("other", 2022, 2025, "2022–2025"),
+                              ("ukraine", 2014, 2021, "2014–2021"), ("ukraine", 2022, 2025, "2022–2025")]:
         s = main[(main.group == g) & main.year.between(lo, hi)]
         agg.append(dict(group=g, period=lab, actual_bn=s.trade.sum() / 1e3, predicted_bn=s.pred.sum() / 1e3,
                         gap_bn=(s.trade.sum() - s.pred.sum()) / 1e3, ratio=s.trade.sum() / s.pred.sum()))

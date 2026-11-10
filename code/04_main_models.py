@@ -130,13 +130,13 @@ def main() -> None:
     clean = d[(d.flag_carry == 0) & ~d.iso3_i.isin(["ARE", "BLR"]) & ~d.iso3_j.isin(["ARE", "BLR"]) & (d.year >= 2009)]
     base_covs = SANC_VARS + POLICY
     m2 = {
-        "(1) 2000–2024": fit_model(d, base_covs, "cy+pair", dyadic=True),
-        "(2) 2009–2024 (основная)": fit_model(d09, base_covs, "cy+pair", dyadic=True),
+        "(1) 2000–2025": fit_model(d, base_covs, "cy+pair", dyadic=True),
+        "(2) 2009–2025 (основная)": fit_model(d09, base_covs, "cy+pair", dyadic=True),
         "(3) 2009–2021": fit_model(d09[d09.year <= 2021], base_covs, "cy+pair", dyadic=True),
         "(4) 2014 — переходный год": fit_model(d09, ["core14_2014", "sanc14_alt"] + [c for c in base_covs if c != "sanc14_ij"],
                                                "cy+pair", dyadic=True),
         "(5) «чистая» выборка": fit_model(clean, base_covs, "cy+pair", dyadic=True),
-        "(6) 2000–2024, пре-тренд": fit_model(d, base_covs + ["coal_pretrend"], "cy+pair", dyadic=True),
+        "(6) 2000–2025, пре-тренд": fit_model(d, base_covs + ["coal_pretrend"], "cy+pair", dyadic=True),
         "(7) МНК ln T": fit_model(d09, base_covs, "cy+pair", kind="ols"),
     }
     for k, r in m2.items():
@@ -160,12 +160,12 @@ def main() -> None:
     pd.DataFrame(rows).to_csv(RESULTS / "table2b_dyadic_se.csv", index=False)
 
     # ключевые числа
-    t = m2["(2) 2009–2024 (основная)"].table()
+    t = m2["(2) 2009–2025 (основная)"].table()
     for v in SANC_VARS + POLICY:
         summary[f"main_{v}"] = {k: float(t.loc[v, k]) for k in ("coef", "se", "p", "pct_effect")}
     summary["main_total_effect_2022_core"] = float(t.loc["sanc14_ij", "coef"] + t.loc["sanc22_ij", "coef"])
-    summary["main_nobs"] = m2["(2) 2009–2024 (основная)"].nobs
-    c, s = contrast(m2["(2) 2009–2024 (основная)"], {"sanc14_ij": 1, "sanc22_ij": 1})
+    summary["main_nobs"] = m2["(2) 2009–2025 (основная)"].nobs
+    c, s = contrast(m2["(2) 2009–2025 (основная)"], {"sanc14_ij": 1, "sanc22_ij": 1})
     summary["main_total_core_post22"] = {"coef": c, "se": s, "pct": 100 * (np.exp(c) - 1)}
 
     # ------------------------------------------------------------------
@@ -259,19 +259,19 @@ def main() -> None:
         all_long.append(long_rows(nm, r))
     grad_rows = []
     for tag, r in [("без санкционных индикаторов", r_d1), ("с санкционными индикаторами", r_d1b)]:
-        for p, lab in [("p1", "2000–2013"), ("p2", "2014–2021"), ("p3", "2022–2024")]:
+        for p, lab in [("p1", "2000–2013"), ("p2", "2014–2021"), ("p3", "2022–2025")]:
             c, s = contrast(r, {"ldist": 1, f"ldist_rus_{p}": 1})
             grad_rows.append({"spec": tag, "period": lab, "elasticity_russia": c, "se": s,
                               "lo95": c - 1.96 * s, "hi95": c + 1.96 * s})
         c, s = contrast(r, {"ldist_rus_p3": 1, "ldist_rus_p1": -1})
-        grad_rows.append({"spec": tag, "period": "Δ (2022–24) − (2000–13)", "elasticity_russia": c, "se": s,
+        grad_rows.append({"spec": tag, "period": "Δ (2022–25) − (2000–13)", "elasticity_russia": c, "se": s,
                           "lo95": c - 1.96 * s, "hi95": c + 1.96 * s})
         c0, s0 = contrast(r, {"ldist": 1})
         grad_rows.append({"spec": tag, "period": "прочие пары (база)", "elasticity_russia": c0, "se": s0,
                           "lo95": c0 - 1.96 * s0, "hi95": c0 + 1.96 * s0})
     pd.DataFrame(grad_rows).to_csv(RESULTS / "table4_distance_gradient.csv", index=False)
     labD = {**LABELS, "ldist_rus_p1": "ln расстояние × Россия × 2000–2013", "ldist_rus_p2": "ln расстояние × Россия × 2014–2021",
-            "ldist_rus_p3": "ln расстояние × Россия × 2022–2024", "dist14": "ln расстояние (центр.) × Россия × (t ≥ 2014)",
+            "ldist_rus_p3": "ln расстояние × Россия × 2022–2025", "dist14": "ln расстояние (центр.) × Россия × (t ≥ 2014)",
             "dist22": "ln расстояние (центр.) × Россия × (t ≥ 2022)"}
     wide4 = results_to_wide({"(D1) страна×год ЭФ": r_d1, "(D2) + санкц. индикаторы": r_d1b, "(D3) + парные ЭФ": r_d2,
                              "(D4) + парные ЭФ, санкц.": r_d3}, labD,
@@ -296,7 +296,7 @@ def main() -> None:
     rP = fit_model(dp, cols + POLICY, "cy+pair")
     all_long.append(long_rows("partner-specific shifts", rP))
     rows = []
-    for per, pre in [("2014–2021", "s2_"), ("2022–2024", "s3_")]:
+    for per, pre in [("2014–2021", "s2_"), ("2022–2025", "s3_")]:
         names = [pre + p for p in partners if p != ref]
         n = len(partners)
         for pcode in partners:

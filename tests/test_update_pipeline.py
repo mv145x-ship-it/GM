@@ -87,6 +87,13 @@ def test_mirror_totals():
     assert r.src_new == merge.SRC_BOTH
     r = t.loc[("IND", "RUS", 2023)]
     assert abs(r.trade_new - 40.0) < 1e-9 and r.n_reports == 1 and np.isnan(r.mirror_ratio) and r.src_new == merge.SRC_J
+    # неполное сообщение (только экспорт) отбрасывается, если есть полное сообщение партнёра
+    cd2 = pd.concat([cd, pd.DataFrame([("IND", "RUS", 2023, "X", 5e6)], columns=cd.columns)], ignore_index=True)
+    r = merge.mirror_totals(cd2).set_index(["iso3_i", "iso3_j", "year"]).loc[("IND", "RUS", 2023)]
+    assert abs(r.trade_new - 40.0) < 1e-9 and r.n_reports == 1
+    # для пар с Россией берётся сообщение партнёра
+    r = merge.mirror_totals(cd, partner_only=("RUS",)).set_index(["iso3_i", "iso3_j", "year"]).loc[("CHN", "RUS", 2023)]
+    assert abs(r.trade_new - 160.0) < 1e-9 and r.src_new.startswith(merge.SRC_I)
 
 
 # ----------------------------------------------------------------------------

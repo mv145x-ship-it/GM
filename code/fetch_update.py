@@ -9,6 +9,7 @@
   probe     проверить доступность хостов (диагностика сети и прокси);
   wdi       ВВП, численность населения, ВВП на душу — World Bank WDI (api.worldbank.org);
   weo       ВВП, население, ВВП на душу — МВФ, WEO DataMapper (оценки на последние годы);
+  comtrade-public  то же, что comtrade, но без ключа (открытая точка preview: один год на запрос);
   comtrade  суммарная торговля reporter→partner (экспорт X, импорт M), UN Comtrade API v1
             (нужен ключ: переменная окружения COMTRADE_API_KEY; бесплатный ключ выдаётся
             на comtradeplus.un.org);
@@ -167,7 +168,9 @@ def fetch_weo(start: int, end: int) -> pd.DataFrame:
     iso = "/".join(sorted(COUNTRIES))
     out = None
     for code, name in WEO_INDICATORS.items():
-        df = parse_weo(http_json(f"https://www.imf.org/external/datamapper/api/v1/{code}/{iso}"), code, name)
+        isos = sorted(COUNTRIES)
+        df = pd.concat([parse_weo(http_json("https://www.imf.org/external/datamapper/api/v1/" + code + "/" + "/".join(isos[k:k + 8])),
+                                  code, name) for k in range(0, len(isos), 8)], ignore_index=True).drop_duplicates(["iso3", "year"])
         out = df if out is None else out.merge(df, on=["iso3", "year"], how="outer")
     out = out[(out.year >= start) & (out.year <= end) & out.iso3.isin(COUNTRIES)].sort_values(["iso3", "year"])
     RAW.mkdir(parents=True, exist_ok=True)
@@ -216,6 +219,50 @@ def fetch_comtrade(start: int, end: int, key: str, chunk: int = 5) -> pd.DataFra
     return out
 
 
+COMTRADE_PUBLIC_URL = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
+
+
+def fetch_comtrade_public(start: int, end: int, pause: float = 1.2) -> pd.DataFrame:
+    """То же, что fetch_comtrade, но через открытую точку preview (без ключа).
+
+    Ограничения точки: один период на запрос и не более 500 записей, поэтому запросов
+    32 страны × число лет. Ответы кэшируются (data/raw_update/cache/), загрузку можно продолжать.
+    Коды стран в ответе числовые; ISO3 восстанавливается по справочнику Reporters.json.
+    """
+    CACHE.mkdir(parents=True, exist_ok=True)
+    codes_all = parse_comtrade_reporters(http_json(COMTRADE_REPORTERS))
+    codes = {c: codes_all[c] for c in COUNTRIES}
+    iso_of = {v: k for k, v in codes.items()}
+    frames = []
+    for rep in sorted(COUNTRIES):
+        partners = ",".join(str(codes[p]) for p in sorted(COUNTRIES) if p != rep)
+        n_rep = 0
+        for year in range(start, end + 1):
+            cache = CACHE / f"comtrade_public_{rep}_{year}.json"
+            if cache.exists():
+                payload = json.loads(cache.read_text(encoding="utf-8"))
+            else:
+                q = dict(reporterCode=codes[rep], partnerCode=partners, period=year, cmdCode="TOTAL", flowCode="X,M",
+                         partner2Code=0, customsCode="C00", motCode=0)
+                payload = http_json(COMTRADE_PUBLIC_URL + "?" + urllib.parse.urlencode(q), retries=6)
+                if not isinstance(payload, dict) or "data" not in payload or payload.get("error"):
+                    raise RuntimeError(f"Comtrade preview {rep} {year}: {str(payload)[:300]}")
+                cache.write_text(json.dumps(payload), encoding="utf-8")
+                time.sleep(pause)
+            rows = [(iso_of.get(r.get("reporterCode")), iso_of.get(r.get("partnerCode")), int(r["refYear"]), r.get("flowCode"),
+                     float(r["primaryValue"])) for r in payload["data"] or [] if r.get("primaryValue") is not None]
+            n_rep += len(rows)
+            frames.append(pd.DataFrame(rows, columns=["reporter", "partner", "year", "flow", "value_usd"]))
+        print(f"  {rep}: {n_rep} записей", flush=True)
+    out = pd.concat(frames, ignore_index=True)
+    out = out[out.reporter.isin(COUNTRIES) & out.partner.isin(COUNTRIES) & out.flow.isin(["X", "M"])]
+    out = out.groupby(["reporter", "partner", "year", "flow"], as_index=False).value_usd.sum()
+    out.to_csv(RAW / "comtrade_directional.csv", index=False)
+    write_manifest("comtrade", {"start": start, "end": end, "cmdCode": "TOTAL", "flows": "X,M", "endpoint": "public preview"},
+                   len(out))
+    return out
+
+
 def probe() -> int:
     bad = 0
     for name, url in PROBES.items():
@@ -231,7 +278,7 @@ def probe() -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cmd", choices=["probe", "wdi", "weo", "comtrade", "all"])
+    ap.add_argument("cmd", choices=["probe", "wdi", "weo", "comtrade", "comtrade-public", "all"])
     ap.add_argument("--start", type=int, default=2000)
     ap.add_argument("--end", type=int, default=datetime.now().year - 1,
                     help="последний год (по умолчанию — прошлый календарный год)")
@@ -244,6 +291,9 @@ def main() -> None:
     if args.cmd in ("weo", "all"):
         print("WEO …")
         print(len(fetch_weo(args.start, args.end)), "строк")
+    if args.cmd == "comtrade-public":
+        print("Comtrade (открытая точка preview) …")
+        print(len(fetch_comtrade_public(args.start, args.end)), "строк")
     if args.cmd in ("comtrade", "all"):
         key = os.environ.get("COMTRADE_API_KEY")
         if not key:

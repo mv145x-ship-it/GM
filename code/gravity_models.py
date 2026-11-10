@@ -15,12 +15,15 @@ import ppml
 from gravity_common import COALITION_2014, DATA, RESULTS, ROOT
 
 CORE = sorted(COALITION_2014)
+# Основная панель для оценивания: обновлённая (2000–2025; code/10_merge_update.py).
+# Исходная панель на данных ВКР (2000–2024) — data/gravity_panel.csv.
+PANEL_FILE = "gravity_panel_updated.csv"
 
 
 def load_panel(path=None) -> pd.DataFrame:
     """Гармонизированная панель. Путь можно задать аргументом или переменной окружения GM_PANEL
     (например, GM_PANEL=data/gravity_panel_updated.csv после code/10_merge_update.py)."""
-    path = path or os.environ.get("GM_PANEL") or DATA / "gravity_panel.csv"
+    path = path or os.environ.get("GM_PANEL") or DATA / PANEL_FILE
     if not Path(path).is_absolute():
         path = ROOT / path if (ROOT / path).exists() else Path(path)
     d = pd.read_csv(path)

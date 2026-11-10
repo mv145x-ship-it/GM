@@ -17,6 +17,8 @@
    страной i о торговле с j, и «экспорт + импорт», сообщённые страной j о торговле с i
    (если сообщение одно — берётся оно). ``mirror_ratio`` — отношение большего сообщения к меньшему
    (значения > 3 указывают на ошибки отчётности и требуют проверки).
+   Для стран из ``--partner-only`` (в расчётах статьи — RUS) торговля пары берётся из сообщения партнёра
+   за все годы: Россия не публикует детальную статистику с 2022 г., и смешение источников дало бы разрыв ряда.
 2. Политика замены ``--replace``:
      none     добавляются только годы после последнего года панели;
      flagged  + заменяются «протянутые» значения (flag_carry = 1), если есть данные Comtrade (по умолчанию);
@@ -52,9 +54,10 @@ STATIC_COLS = ["pair_id", "iso3_i", "iso3_j", "country_i", "country_j", "dist", 
 SRC_BOTH = "Comtrade (среднее двух зеркальных сообщений)"
 SRC_I = "Comtrade (сообщение страны i)"
 SRC_J = "Comtrade (сообщение страны j)"
+PARTNER_ONLY_NOTE = "; сообщения второй страны не используются"
 
 
-def mirror_totals(cd: pd.DataFrame) -> pd.DataFrame:
+def mirror_totals(cd: pd.DataFrame, partner_only: tuple[str, ...] = ()) -> pd.DataFrame:
     """Направленные потоки → суммарная торговля неупорядоченных пар (млн долл.).
 
     cd: reporter, partner, year, flow ('X'|'M'), value_usd.
@@ -66,12 +69,15 @@ def mirror_totals(cd: pd.DataFrame) -> pd.DataFrame:
         if f not in w:
             w[f] = np.nan
     w["rep_total"] = w[["X", "M"]].sum(axis=1, min_count=1) / 1e6
+    w["complete"] = w[["X", "M"]].notna().all(axis=1)      # сообщение содержит и экспорт, и импорт
     swap = w.reporter > w.partner
     w["iso3_i"] = np.where(swap, w.partner, w.reporter)
     w["iso3_j"] = np.where(swap, w.reporter, w.partner)
     w["side"] = np.where(swap, "j", "i")
-    p = w.pivot_table(index=["iso3_i", "iso3_j", "year"], columns="side", values="rep_total",
-                      aggfunc="first").reset_index()
+    # неполные сообщения (только экспорт или только импорт) используются, лишь если полных для пары-года нет
+    key = ["iso3_i", "iso3_j", "year"]
+    w = w[w.complete | ~w.groupby(key).complete.transform("any")]
+    p = w.pivot_table(index=key, columns="side", values="rep_total", aggfunc="first").reset_index()
     for c in ("i", "j"):
         if c not in p:
             p[c] = np.nan
@@ -81,6 +87,12 @@ def mirror_totals(cd: pd.DataFrame) -> pd.DataFrame:
     lo = p[["i", "j"]].min(axis=1).where(lambda s: s > 0)
     p["mirror_ratio"] = np.where(both, p[["i", "j"]].max(axis=1) / lo, np.nan)
     p["src_new"] = np.select([both, p.i.notna(), p.j.notna()], [SRC_BOTH, SRC_I, SRC_J], "")
+    # страны, чьи собственные сообщения не используются, если есть сообщение партнёра (единый ряд по всем годам)
+    for c in partner_only:
+        for own, oth, src in (("i", "j", SRC_J), ("j", "i", SRC_I)):
+            m = (p[f"iso3_{own}"] == c) & p[oth].notna()
+            p.loc[m, "trade_new"] = p.loc[m, oth]
+            p.loc[m, "src_new"] = src + PARTNER_ONLY_NOTE
     return p[["iso3_i", "iso3_j", "year", "trade_new", "n_reports", "mirror_ratio", "src_new"]]
 
 
@@ -118,7 +130,7 @@ def macro_updated(old: pd.DataFrame, wdi: pd.DataFrame | None, weo: pd.DataFrame
 
 def update_panel(base: pd.DataFrame, macro_old: pd.DataFrame, cd: pd.DataFrame, wdi: pd.DataFrame | None,
                  weo: pd.DataFrame | None, end: int, replace: str = "flagged",
-                 refresh_macro: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+                 refresh_macro: bool = False, partner_only: tuple[str, ...] = ()) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Вернуть (обновлённая панель, сводка)."""
     assert replace in ("none", "flagged", "all")
     macro = macro_updated(macro_old, wdi, weo, end, refresh_macro)
@@ -126,7 +138,7 @@ def update_panel(base: pd.DataFrame, macro_old: pd.DataFrame, cd: pd.DataFrame, 
     grid = static.merge(pd.DataFrame({"year": list(range(int(base.year.min()), end + 1))}), how="cross")
     old = base[["pair_id", "year", "trade", "trade_src", "flag_carry"]].rename(
         columns={"trade": "trade_old", "trade_src": "src_old", "flag_carry": "carry_old"})
-    grid = grid.merge(old, on=["pair_id", "year"], how="left").merge(mirror_totals(cd), on=["iso3_i", "iso3_j", "year"],
+    grid = grid.merge(old, on=["pair_id", "year"], how="left").merge(mirror_totals(cd, partner_only), on=["iso3_i", "iso3_j", "year"],
                                                                    how="left")
     has_old, has_new = grid.trade_old.notna(), grid.trade_new.notna()
     use_new = {"none": ~has_old & has_new,
@@ -178,6 +190,8 @@ def main() -> None:
     ap.add_argument("--end-year", type=int, default=None, help="по умолчанию — последний год в данных Comtrade")
     ap.add_argument("--replace", choices=["none", "flagged", "all"], default="flagged")
     ap.add_argument("--refresh-macro", action="store_true")
+    ap.add_argument("--partner-only", default="", help="коды стран через запятую (например, RUS): для пар с такой страной берётся "
+                                                       "сообщение партнёра за все годы, а собственные сообщения страны — только при его отсутствии")
     ap.add_argument("--out", default=str(DATA / "gravity_panel_updated.csv"))
     args = ap.parse_args()
 
@@ -190,7 +204,7 @@ def main() -> None:
     macro_old = pd.read_csv(args.macro_base)
     end = args.end_year or int(cd.year.max())
     out, rep = update_panel(base, macro_old, cd, _read_optional(raw / "wdi.csv"), _read_optional(raw / "weo.csv"), end,
-                            args.replace, args.refresh_macro)
+                            args.replace, args.refresh_macro, tuple(c for c in args.partner_only.split(",") if c))
     out_path = Path(args.out)
     out.to_csv(out_path, index=False)
     b01.export_gretl(out.drop(columns=["mirror_ratio"]), suffix="_updated")
