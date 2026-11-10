@@ -68,7 +68,7 @@ PROBES = {
 # ----------------------------------------------------------------------------
 # HTTP
 # ----------------------------------------------------------------------------
-def http_json(url: str, headers: dict | None = None, retries: int = 4, timeout: int = 90):
+def http_json(url: str, headers: dict | None = None, retries: int = 4, timeout: int = 90, quota_wait: int = 0):
     """GET → JSON с повторами при временных ошибках (429/5xx, сетевые сбои)."""
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", **(headers or {})})
     for k in range(retries):
@@ -78,6 +78,9 @@ def http_json(url: str, headers: dict | None = None, retries: int = 4, timeout: 
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503, 504) and k < retries - 1:
                 time.sleep(2 ** (k + 2))
+                continue
+            if e.code == 403 and quota_wait and k < retries - 1:      # Comtrade: «Quota Exceeded» — подождать и повторить
+                time.sleep(quota_wait)
                 continue
             raise
         except urllib.error.URLError:
@@ -222,7 +225,7 @@ def fetch_comtrade(start: int, end: int, key: str, chunk: int = 5) -> pd.DataFra
 COMTRADE_PUBLIC_URL = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
 
 
-def fetch_comtrade_public(start: int, end: int, pause: float = 1.2) -> pd.DataFrame:
+def fetch_comtrade_public(start: int, end: int, pause: float = 2.5) -> pd.DataFrame:
     """То же, что fetch_comtrade, но через открытую точку preview (без ключа).
 
     Ограничения точки: один период на запрос и не более 500 записей, поэтому запросов
@@ -244,7 +247,7 @@ def fetch_comtrade_public(start: int, end: int, pause: float = 1.2) -> pd.DataFr
             else:
                 q = dict(reporterCode=codes[rep], partnerCode=partners, period=year, cmdCode="TOTAL", flowCode="X,M",
                          partner2Code=0, customsCode="C00", motCode=0)
-                payload = http_json(COMTRADE_PUBLIC_URL + "?" + urllib.parse.urlencode(q), retries=6)
+                payload = http_json(COMTRADE_PUBLIC_URL + "?" + urllib.parse.urlencode(q), retries=12, quota_wait=90)
                 if not isinstance(payload, dict) or "data" not in payload or payload.get("error"):
                     raise RuntimeError(f"Comtrade preview {rep} {year}: {str(payload)[:300]}")
                 cache.write_text(json.dumps(payload), encoding="utf-8")
