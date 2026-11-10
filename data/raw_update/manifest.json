@@ -26,14 +26,14 @@
   "n_rows": 864
  },
  "comtrade": {
-  "fetched_at_utc": "2026-11-10T18:51:19+00:00",
+  "fetched_at_utc": "2026-11-10T19:44:40+00:00",
   "params": {
-   "start": 2019,
+   "start": 2000,
    "end": 2025,
    "cmdCode": "TOTAL",
    "flows": "X,M",
    "endpoint": "public preview"
   },
-  "n_rows": 12395
+  "n_rows": 49388
  }
 }
