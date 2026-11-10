@@ -339,9 +339,11 @@ def build_tables(v: dict) -> dict:
         s2 = ps[(ps.partner == p) & (ps.period == "2014–2021")].iloc[0]
         s3 = ps[(ps.partner == p) & (ps.period == "2022–2025")].iloc[0]
         r21 = cfp[(cfp.partner == p) & (cfp.year == 2021)].ratio.iloc[0]
-        r24 = cfp[(cfp.partner == p) & (cfp.year == 2025)].ratio.iloc[0]
-        rows.append({"Партнёр": RU_NAME[p], "Группа": grp, "2013": rn(piv.loc[p, 2013], 1), "2021": rn(piv.loc[p, 2021], 1), "2025": rn(piv.loc[p, 2025], 1),
-                     "Сдвиг 2014–21": rn(s2.coef, 2), "Сдвиг 2022–25": rn(s3.coef, 2), "Факт/ор. 2021": rn(r21, 2), "Факт/ор. 2025": rn(r24, 2)})
+        r24 = cfp[(cfp.partner == p) & (cfp.year == 2025)].ratio
+        na = lambda x, d: rn(x, d) if pd.notna(x) else "—"          # нет данных за 2025 г.
+        rows.append({"Партнёр": RU_NAME[p], "Группа": grp, "2013": rn(piv.loc[p, 2013], 1), "2021": rn(piv.loc[p, 2021], 1), "2025": na(piv.loc[p, 2025], 1),
+                     "Сдвиг 2014–21": rn(s2.coef, 2), "Сдвиг 2022–25": rn(s3.coef, 2), "Факт/ор. 2021": rn(r21, 2),
+                     "Факт/ор. 2025": na(r24.iloc[0] if len(r24) else np.nan, 2)})
     T["ta3"] = md_table(pd.DataFrame(rows), widths=[1.6, 0.9, 0.7, 0.7, 0.7, 1.0, 1.0, 1.0, 1.0], align="llcccccc" + "c")
     # Приложение: словарь переменных (краткий)
     from data_dictionary import PANEL_VARS

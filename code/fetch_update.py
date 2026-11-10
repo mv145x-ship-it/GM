@@ -128,6 +128,8 @@ def parse_comtrade_reporters(payload) -> dict[str, int]:
     for it in items:
         iso = it.get("reporterCodeIsoAlpha3") or it.get("ISO3")
         code = it.get("reporterCode", it.get("id"))
+        if it.get("entryExpiredDate") or it.get("isGroup"):      # устаревшие коды (напр. 841 «USA ...1980», 356 «India ...1974»)
+            continue
         if iso and code is not None and str(code).lstrip("-").isdigit():
             out[iso] = int(code)
     return out
@@ -225,7 +227,7 @@ def fetch_comtrade(start: int, end: int, key: str, chunk: int = 5) -> pd.DataFra
 COMTRADE_PUBLIC_URL = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
 
 
-def fetch_comtrade_public(start: int, end: int, pause: float = 2.5) -> pd.DataFrame:
+def fetch_comtrade_public(start: int, end: int, pause: float = 2.5, supplement: bool = False) -> pd.DataFrame:
     """То же, что fetch_comtrade, но через открытую точку preview (без ключа).
 
     Ограничения точки: один период на запрос и не более 500 записей, поэтому запросов
@@ -252,8 +254,24 @@ def fetch_comtrade_public(start: int, end: int, pause: float = 2.5) -> pd.DataFr
                     raise RuntimeError(f"Comtrade preview {rep} {year}: {str(payload)[:300]}")
                 cache.write_text(json.dumps(payload), encoding="utf-8")
                 time.sleep(pause)
+            data = list(payload["data"] or [])
+            # дозапрос партнёров, которых нет в кэшированном ответе (кэш мог быть получен с неполным списком партнёров)
+            have = {r.get("partnerCode") for r in data}
+            miss = [p for p in sorted(COUNTRIES) if p != rep and codes[p] not in have]
+            sup = CACHE / f"comtrade_public_{rep}_{year}_sup.json"
+            if sup.exists():
+                data += json.loads(sup.read_text(encoding="utf-8"))["data"] or []
+            elif supplement and miss and data:
+                q = dict(reporterCode=codes[rep], partnerCode=",".join(str(codes[p]) for p in miss), period=year, cmdCode="TOTAL",
+                         flowCode="X,M", partner2Code=0, customsCode="C00", motCode=0)
+                pl = http_json(COMTRADE_PUBLIC_URL + "?" + urllib.parse.urlencode(q), retries=12, quota_wait=90)
+                if not isinstance(pl, dict) or "data" not in pl or pl.get("error"):
+                    raise RuntimeError(f"Comtrade preview {rep} {year} (дозапрос): {str(pl)[:300]}")
+                sup.write_text(json.dumps(pl), encoding="utf-8")
+                data += pl["data"] or []
+                time.sleep(pause)
             rows = [(iso_of.get(r.get("reporterCode")), iso_of.get(r.get("partnerCode")), int(r["refYear"]), r.get("flowCode"),
-                     float(r["primaryValue"])) for r in payload["data"] or [] if r.get("primaryValue") is not None]
+                     float(r["primaryValue"])) for r in data if r.get("primaryValue") is not None]
             n_rep += len(rows)
             frames.append(pd.DataFrame(rows, columns=["reporter", "partner", "year", "flow", "value_usd"]))
         print(f"  {rep}: {n_rep} записей", flush=True)
@@ -285,6 +303,8 @@ def main() -> None:
     ap.add_argument("--start", type=int, default=2000)
     ap.add_argument("--end", type=int, default=datetime.now().year - 1,
                     help="последний год (по умолчанию — прошлый календарный год)")
+    ap.add_argument("--supplement", action="store_true",
+                    help="comtrade-public: дозапросить партнёров, отсутствующих в кэшированных ответах")
     args = ap.parse_args()
     if args.cmd == "probe":
         sys.exit(1 if probe() else 0)
@@ -296,7 +316,7 @@ def main() -> None:
         print(len(fetch_weo(args.start, args.end)), "строк")
     if args.cmd == "comtrade-public":
         print("Comtrade (открытая точка preview) …")
-        print(len(fetch_comtrade_public(args.start, args.end)), "строк")
+        print(len(fetch_comtrade_public(args.start, args.end, supplement=args.supplement)), "строк")
     if args.cmd in ("comtrade", "all"):
         key = os.environ.get("COMTRADE_API_KEY")
         if not key:

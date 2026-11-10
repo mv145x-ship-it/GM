@@ -21,7 +21,9 @@
    за все годы: Россия не публикует детальную статистику с 2022 г., и смешение источников дало бы разрыв ряда.
 2. Политика замены ``--replace``:
      none     добавляются только годы после последнего года панели;
-     flagged  + заменяются «протянутые» значения (flag_carry = 1), если есть данные Comtrade (по умолчанию);
+     flagged  + заменяются «протянутые» значения (flag_carry = 1), если есть данные Comtrade;
+     verify   заменяются значения, не подтверждённые ни одним из двух сообщений Comtrade (расхождение более 10 %);
+              подтверждённые сохраняются, чтобы не создавать разрыв ряда (по умолчанию);
      all      все значения заменяются данными Comtrade (единый источник; прежнее значение —
               запасной вариант, если новых данных нет).
 3. Макроданные: значения за годы, уже имеющиеся в панели, сохраняются, кроме оценок
@@ -93,7 +95,8 @@ def mirror_totals(cd: pd.DataFrame, partner_only: tuple[str, ...] = ()) -> pd.Da
             m = (p[f"iso3_{own}"] == c) & p[oth].notna()
             p.loc[m, "trade_new"] = p.loc[m, oth]
             p.loc[m, "src_new"] = src + PARTNER_ONLY_NOTE
-    return p[["iso3_i", "iso3_j", "year", "trade_new", "n_reports", "mirror_ratio", "src_new"]]
+    p = p.rename(columns={"i": "rep_i", "j": "rep_j"})
+    return p[["iso3_i", "iso3_j", "year", "trade_new", "n_reports", "mirror_ratio", "src_new", "rep_i", "rep_j"]]
 
 
 def macro_updated(old: pd.DataFrame, wdi: pd.DataFrame | None, weo: pd.DataFrame | None, end: int,
@@ -130,9 +133,10 @@ def macro_updated(old: pd.DataFrame, wdi: pd.DataFrame | None, weo: pd.DataFrame
 
 def update_panel(base: pd.DataFrame, macro_old: pd.DataFrame, cd: pd.DataFrame, wdi: pd.DataFrame | None,
                  weo: pd.DataFrame | None, end: int, replace: str = "flagged",
-                 refresh_macro: bool = False, partner_only: tuple[str, ...] = ()) -> tuple[pd.DataFrame, pd.DataFrame]:
+                 refresh_macro: bool = False, partner_only: tuple[str, ...] = (),
+                 verify_tol: float = 0.10) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Вернуть (обновлённая панель, сводка)."""
-    assert replace in ("none", "flagged", "all")
+    assert replace in ("none", "flagged", "verify", "all")
     macro = macro_updated(macro_old, wdi, weo, end, refresh_macro)
     static = base.drop_duplicates("pair_id")[STATIC_COLS]
     grid = static.merge(pd.DataFrame({"year": list(range(int(base.year.min()), end + 1))}), how="cross")
@@ -141,11 +145,30 @@ def update_panel(base: pd.DataFrame, macro_old: pd.DataFrame, cd: pd.DataFrame, 
     grid = grid.merge(old, on=["pair_id", "year"], how="left").merge(mirror_totals(cd, partner_only), on=["iso3_i", "iso3_j", "year"],
                                                                    how="left")
     has_old, has_new = grid.trade_old.notna(), grid.trade_new.notna()
+    # «verify»: прежнее значение сохраняется, если оно подтверждается хотя бы одним сообщением Comtrade (расхождение < tol)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dev = np.fmin(np.abs(np.log(grid.trade_old / grid.rep_i)), np.abs(np.log(grid.trade_old / grid.rep_j)))
+    confirmed = has_old & has_new & (dev < verify_tol) & ~((grid.carry_old == 1) & (dev > 1e-6))   # «протянутые» значения не считаются подтверждёнными
+    if replace == "verify":
+        # Новые и исправляемые значения берутся по возможности из сообщений той же страны, с которыми совпадали
+        # подтверждённые значения пары (исходный набор построен на сообщениях одной из сторон), чтобы ряд не менял источник.
+        d_i = np.abs(np.log(grid.trade_old / grid.rep_i)).where(confirmed)
+        d_j = np.abs(np.log(grid.trade_old / grid.rep_j)).where(confirmed)
+        side = pd.Series(np.where(d_i.fillna(np.inf) <= d_j.fillna(np.inf), 1.0, -1.0), index=grid.index).where(confirmed)
+        pref = side.groupby(grid.pair_id).transform("sum")           # > 0: чаще совпадало с сообщением страны i
+        po_i, po_j = grid.iso3_i.isin(partner_only), grid.iso3_j.isin(partner_only)
+        for own, oth, cond, src in (("rep_i", "rep_j", (pref > 0) & ~po_i & ~po_j, SRC_I), ("rep_j", "rep_i", (pref < 0) & ~po_i & ~po_j, SRC_J)):
+            m = cond & grid[own].notna()
+            grid.loc[m, "trade_new"] = grid.loc[m, own]
+            grid.loc[m, "src_new"] = src
     use_new = {"none": ~has_old & has_new,
+               "verify": has_new & ~confirmed,
                "flagged": (~has_old & has_new) | (has_old & has_new & (grid.carry_old == 1)),
                "all": has_new}[replace]
     grid["trade"] = np.where(use_new, grid.trade_new, grid.trade_old)
     grid["trade_src"] = np.where(use_new, grid.src_new, grid.src_old)
+    grid.loc[confirmed & ~use_new, "trade_src"] = "ВКР (подтверждено сообщением Comtrade)"
+    n_checked, n_confirmed = int((has_old & has_new).sum()), int(confirmed.sum())
     n_missing = int(grid.trade.isna().sum())
     missing_years = sorted(grid.loc[grid.trade.isna(), "year"].unique().tolist())
     grid = grid[grid.trade.notna()].copy()
@@ -169,6 +192,7 @@ def update_panel(base: pd.DataFrame, macro_old: pd.DataFrame, cd: pd.DataFrame, 
         ("годы", f"{int(out.year.min())}–{int(out.year.max())}"),
         ("новых наблюдений (годы после последнего года прежней панели)", int((use_new & ~has_old).sum())),
         (f"заменено прежних значений (политика {replace})", int((use_new & has_old).sum())),
+        ("прежних значений сверено с Comtrade / подтверждено (расхождение < tol)", f"{n_checked} / {n_confirmed}"),
         ("пары-годы без торговли (исключены); годы", f"{n_missing}; {missing_years}"),
         ("строк без макроданных (ВВП/население)", no_macro),
         ("пар-годов с mirror_ratio > 3", int((out.mirror_ratio > 3).sum())),
@@ -188,7 +212,7 @@ def main() -> None:
     ap.add_argument("--base", default=str(DATA / "gravity_panel.csv"))
     ap.add_argument("--macro-base", default=str(DATA / "macro_country_year.csv"))
     ap.add_argument("--end-year", type=int, default=None, help="по умолчанию — последний год в данных Comtrade")
-    ap.add_argument("--replace", choices=["none", "flagged", "all"], default="flagged")
+    ap.add_argument("--replace", choices=["none", "flagged", "verify", "all"], default="verify")
     ap.add_argument("--refresh-macro", action="store_true")
     ap.add_argument("--partner-only", default="", help="коды стран через запятую (например, RUS): для пар с такой страной берётся "
                                                        "сообщение партнёра за все годы, а собственные сообщения страны — только при его отсутствии")

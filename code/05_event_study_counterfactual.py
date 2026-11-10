@@ -67,7 +67,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     for window, y0 in [("2000-2025", 2000), ("2009-2025", 2009)]:
         dd = d[d.year >= y0].copy()
-        years = [y for y in range(y0, 2025) if y != 2013]
+        years = [y for y in range(y0, 2026) if y != 2013]
         cols = event_dummies(dd, dd.core14_rus_ij.eq(1), "coal", years)
         cols += event_dummies(dd, dd.ukr_rus_ij.eq(1), "ukr", years)
         covs = cols + ["kor22_ij"] + POLICY
@@ -88,7 +88,7 @@ def main() -> None:
     # 2) Event study по подгруппам (окно 2009–2025)
     # ------------------------------------------------------------------
     dd = d[d.year >= 2009].copy()
-    years = [y for y in range(2009, 2025) if y != 2013]
+    years = [y for y in range(2009, 2026) if y != 2013]
     groups = {
         "ЕС-8": dd.partner.isin(EU8), "США, Канада, Австралия, Великобритания": dd.partner.isin(ANGLO),
         "Япония, Норвегия": dd.partner.isin(JPNOR),

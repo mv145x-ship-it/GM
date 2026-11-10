@@ -66,7 +66,9 @@ def test_parse_comtrade():
 def test_parse_reporters():
     payload = {"results": [{"id": "643", "reporterCode": 643, "reporterCodeIsoAlpha3": "RUS"},
                            {"id": "all", "reporterCode": "all", "reporterCodeIsoAlpha3": None},
-                           {"id": "699", "reporterCode": 699, "reporterCodeIsoAlpha3": "IND"}]}
+                           {"id": "356", "reporterCode": 356, "reporterCodeIsoAlpha3": "IND", "entryExpiredDate": "1974-12-31T00:00:00"},
+                           {"id": "699", "reporterCode": 699, "reporterCodeIsoAlpha3": "IND"},
+                           {"id": "841", "reporterCode": 841, "reporterCodeIsoAlpha3": "USA", "entryExpiredDate": "1980-12-31T00:00:00"}]}
     assert fetch.parse_comtrade_reporters(payload) == {"RUS": 643, "IND": 699}
 
 
