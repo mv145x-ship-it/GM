@@ -1,0 +1,15 @@
+# Python >= 3.11. Версии — те, на которых выполнены расчёты (нижние границы).
+numpy>=2.0
+scipy>=1.13
+pandas>=2.2
+statsmodels>=0.14
+pyfixest>=0.30        # только для проверки собственной реализации PPML (code/03_validate_estimator.py)
+matplotlib>=3.8
+pyreadr>=0.5          # чтение данных CEPII (.rda) на шаге 01
+openpyxl>=3.1
+python-docx>=1.1      # постобработка .docx (code/09_make_docx.py)
+Jinja2>=3.1           # шаблон рукописи (code/08_build_paper.py)
+Pillow>=10.0
+
+# Внешние программы (не Python): pandoc >= 3.0 (сборка .docx из Markdown, формулы -> Word),
+# gretl >= 2023c (необязательно; скрипты в gretl/).

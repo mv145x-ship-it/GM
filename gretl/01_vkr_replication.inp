@@ -1,0 +1,23 @@
+# Воспроизведение моделей ВКР в gretl на данных с переименованными переменными
+# (data/vkr_panel_renamed.csv). Результаты совпадают с code/02_replicate_vkr.py и с текстом ВКР
+# (модель 1: N=7440, R2=0,225220; модель 4: N=12400, R2=0,266895).
+#
+# ВАЖНО: укажите корневую папку репозитория на своём компьютере:
+set workdir "/home/user/GM"
+set verbose off
+open data/vkr_panel_renamed.csv --quiet
+setobs pair_id year --panel-vars
+
+series ltrade   = log(trade)
+series lgdppc_i = log(gdppc_i)
+series lgdppc_j = log(gdppc_j)
+series ldist    = log(dist_vkr)
+
+# Модель 1 ВКР: пулированный МНК, данные до 2014 г.
+smpl year <= 2014 --restrict
+ols ltrade const lgdppc_i lgdppc_j ldist
+smpl full
+
+# Модель 4 ВКР: полная выборка, дамми ВКР.
+# Внимание: post2014 и post2022 — ВРЕМЕННЫЕ дамми (равны 1 для всех пар), а не индикаторы санкций против России.
+ols ltrade const lgdppc_i lgdppc_j ldist post2014 contig eu_ij brics_ij nato_ij post2022

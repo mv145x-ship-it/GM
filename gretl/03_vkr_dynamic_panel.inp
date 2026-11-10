@@ -1,0 +1,27 @@
+# Модель 8 ВКР: динамическая панельная модель (системный ОММ Бланделла–Бонда, одношаговая оценка).
+# Результат совпадает с текстом ВКР: коэффициент при лаге 0,904871; BRICS 0,283195; 305 инструментов;
+# тест Саргана Хи-квадрат(298) = 2483,96; AR(1): z = −9,078; AR(2): z = 0,701; тест Вальда Хи-квадрат(6) = 28287,1
+# (диагностические статистики читаются из вывода gretl). Коэффициенты сохраняются в results/vkr_model8_dpanel.csv.
+#
+# ВАЖНО: укажите корневую папку репозитория на своём компьютере:
+set workdir "/home/user/GM"
+set verbose off
+open data/vkr_panel_renamed.csv --quiet
+setobs pair_id year --panel-vars
+
+series ltrade   = log(trade)
+series lgdppc_i = log(gdppc_i)
+series lgdppc_j = log(gdppc_j)
+series ldist    = log(dist_vkr)
+
+dpanel 1 ; ltrade lgdppc_i lgdppc_j ldist post2014 brics_ij const --system
+
+matrix b = $coeff
+matrix se = $stderr
+strings nm = defarray("l_trade_lag1", "l_gdppc_i", "l_gdppc_j", "l_dist", "post2014", "brics_ij", "const")
+outfile "results/vkr_model8_dpanel.csv" --quiet
+    printf "variable,coef,se,nobs\n"
+    loop i = 1..7 --quiet
+        printf "%s,%.10g,%.10g,%d\n", nm[i], b[i], se[i], $nobs
+    endloop
+end outfile

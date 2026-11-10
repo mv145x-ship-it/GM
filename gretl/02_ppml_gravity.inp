@@ -1,0 +1,44 @@
+# PPML-гравитация в gretl (данные data/gravity_panel_gretl.csv).
+# Спецификации соответствуют столбцам (3) и (6) таблицы 1 статьи.
+# ВАЖНО: укажите корневую папку репозитория на своём компьютере:
+set workdir "/home/user/GM"
+set verbose off
+open data/gravity_panel_gretl.csv --quiet
+
+series lgdp_sum = log(gdp_i) + log(gdp_j)
+series lpcdiff  = abs(log(gdppc_i) - log(gdppc_j))
+series ldist    = log(dist)
+
+# --- годовые дамми (без константы: полный набор) ---
+list YD = null
+loop y = 2000..2024 --quiet
+    series yd_$y = (year == y)
+    list YD += yd_$y
+endloop
+
+# --- (3) PPML, год. ЭФ: poisson в gretl (QMLE) с кластерными ошибками по парам ---
+list X3 = lgdp_sum lpcdiff ldist contig comlang_off smctry eu_ij wto_ij eaeu_ij nato_ij brics_ij \
+          rus_pair coal_rus_ij ukr_rus_ij sanc14_ij sanc22_ij kor22_ij ukr14_ij ukr22_ij
+poisson trade_k X3 YD --cluster=pair_id --quiet
+printf "PPML с годовыми ЭФ: ln(ВВП_i)+ln(ВВП_j) = %.4f, ln dist = %.4f, SANC14 = %.4f, SANC22 = %.4f\n", \
+       $coeff(lgdp_sum), $coeff(ldist), $coeff(sanc14_ij), $coeff(sanc22_ij)
+
+# --- (6) PPML, ЭФ страна×год (мультичленство) + парные ЭФ — основная структурная спецификация ---
+# Эффекты базового года (2000) нормируются на ноль, чтобы избежать коллинеарности с парными ЭФ.
+smpl year >= 2009 --restrict          # основное окно 2009–2024 (таблица 2, столбец 2)
+list CYD = null
+loop c = 1..32 --quiet
+    loop y = 2010..2024 --quiet
+        string nm = sprintf("cy_%d_%d", c, y)
+        series @nm = ((iid == c) + (jid == c)) * (year == y)
+        list CYD += @nm
+    endloop
+endloop
+list PD = dummify(pair_id)          # gretl опускает первую категорию, поэтому в модель включается const
+printf "число парных дамми: %d\n", nelem(PD)
+list X6 = sanc14_ij sanc22_ij kor22_ij ukr14_ij ukr22_ij eu_ij wto_ij eaeu_ij nato_ij brics_ij
+poisson trade_k const X6 CYD PD --cluster=pair_id --quiet
+printf "Структурный PPML (2009-2024): SANC14 = %.4f (%.4f), SANC22 = %.4f (%.4f)\n", \
+       $coeff(sanc14_ij), $stderr(sanc14_ij), $coeff(sanc22_ij), $stderr(sanc22_ij)
+printf "Респ. Корея: %.4f; Украина: %.4f и %.4f\n", $coeff(kor22_ij), $coeff(ukr14_ij), $coeff(ukr22_ij)
+printf "ЕС: %.4f; ВТО: %.4f; ЕАЭС: %.4f; НАТО: %.4f; БРИКС: %.4f\n", $coeff(eu_ij), $coeff(wto_ij), $coeff(eaeu_ij), $coeff(nato_ij), $coeff(brics_ij)
